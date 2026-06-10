@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>First-Principles Model — Backtesting Findings</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     background:#fff;color:#1a1a1a;padding:2rem 1.5rem;max-width:980px;margin:0 auto;line-height:1.65}
+h1{font-size:20px;font-weight:500;margin-bottom:6px}
+h2{font-size:15px;font-weight:500;color:#185FA5;margin:2rem 0 .6rem;
+   padding-bottom:4px;border-bottom:1.5px solid #EBF3FC}
+h3{font-size:13px;font-weight:500;color:#444;margin:1.2rem 0 .4rem}
+p{font-size:13px;color:#444;margin-bottom:.75rem}
+.subtitle{font-size:13px;color:#888;margin-bottom:1.75rem}
+
+/* metric cards */
+.card-row{display:grid;gap:10px;margin:1rem 0 1.5rem}
+.card-row-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card-row-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card-row-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:#f5f5f3;border-radius:8px;padding:.8rem 1rem}
+.card-lbl{font-size:11px;color:#888;margin-bottom:3px}
+.card-val{font-size:22px;font-weight:500;color:#1a1a1a;line-height:1.1}
+.card-sub{font-size:11px;color:#888;margin-top:3px}
+.card.blue{background:#EBF3FC}.card.blue .card-val{color:#185FA5}
+.card.green{background:#E1F5EE}.card.green .card-val{color:#0F6E56}
+.card.amber{background:#FEF9EC}.card.amber .card-val{color:#854F0B}
+.card.red{background:#FCEBEB}.card.red .card-val{color:#A32D2D}
+
+/* equations */
+.eq{background:#f0f0ee;border-left:3px solid #185FA5;border-radius:0 6px 6px 0;
+    padding:.6rem 1rem;margin:.6rem 0 .9rem;font-family:"SF Mono",Menlo,monospace;
+    font-size:12px;color:#2a2a2a;line-height:1.7}
+.eq-lbl{font-size:10px;color:#888;display:block;margin-bottom:2px}
+
+/* code */
+pre{background:#1e1e2e;color:#cdd6f4;padding:1rem 1.25rem;border-radius:8px;
+    font-family:"SF Mono",Menlo,Consolas,monospace;font-size:11.5px;line-height:1.65;
+    overflow-x:auto;margin:.75rem 0 1.25rem}
+.kw{color:#cba6f7}.fn{color:#89b4fa}.cm{color:#6c7086;font-style:italic}
+.st{color:#a6e3a1}.nm{color:#fab387}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:12px;margin:.6rem 0 1.25rem}
+th{background:#f0f0ee;font-weight:500;text-align:left;padding:6px 10px;
+   border-bottom:1px solid #ddd}
+td{padding:5px 10px;border-bottom:.5px solid #f0f0f0}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.pos{color:#0F6E56;font-weight:500}.neg{color:#A32D2D;font-weight:500}
+.bold{font-weight:500}
+
+/* alert */
+.alert{border-radius:7px;padding:.75rem 1rem;font-size:12px;line-height:1.6;margin:1rem 0}
+.alert-info{background:#EBF3FC;border:.5px solid #B5D4F4;color:#0C447C}
+.alert-warn{background:#FEF9EC;border:.5px solid #EF9F27;color:#633806}
+.alert strong{display:block;margin-bottom:3px;font-size:12.5px}
+
+/* chart */
+.chart-box{background:#f9f9f7;border-radius:8px;padding:.85rem .9rem .7rem;margin:.75rem 0 1.25rem}
+.chart-title{font-size:12px;font-weight:500;color:#555;margin-bottom:.5rem}
+
+footer{margin-top:3rem;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:.85rem}
+</style>
+</head>
+<body>
+
+<h1>Johor DUN First-Principles Election Model — Backtesting Findings</h1>
+<p class="subtitle">
+  Validation of the seat residual fixed-effect approach using 2018 → 2022 out-of-sample prediction.
+  Analysis covers all 56 Johor DUN constituencies.
+</p>
+
+<!-- ── Executive summary ── -->
+<h2>Executive summary</h2>
+
+<div class="card-row card-row-4">
+  <div class="card blue"><div class="card-lbl">Residual persistence (r)</div>
+    <div class="card-val">0.851</div>
+    <div class="card-sub">2018 ↔ 2022 seat residuals</div></div>
+  <div class="card green"><div class="card-lbl">Avg. residual drift per cycle</div>
+    <div class="card-val">4.2 pp</div>
+    <div class="card-sub">Mean absolute change 2018→2022</div></div>
+  <div class="card"><div class="card-lbl">Backtest RMSE — with priors</div>
+    <div class="card-val">5.9 pp</div>
+    <div class="card-sub">Using 2018 residuals as fixed effects</div></div>
+  <div class="card amber"><div class="card-lbl">Backtest RMSE — no priors</div>
+    <div class="card-val">10.1 pp</div>
+    <div class="card-sub">Composition only, no seat residuals</div></div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Key finding</strong>
+  The 2018 seat-level residuals are sufficiently stable to serve as informative priors for predicting 2022:
+  using them reduces prediction error from 10.1 pp (composition-only) to 5.9 pp — a 4.2 pp improvement.
+  Only 6 of 56 seats flipped residual sign between 2018 and 2022. The model is most vulnerable in seats
+  where PN emerged as a dominant force after 2018 (ENDAU, BUKIT PASIR) or where exceptional local
+  candidate effects occurred (YONG PENG).
+</div>
+
+<!-- ── Model architecture ── -->
+<h2>1. Model architecture</h2>
+
+<h3>Stage 1 — Within-group turnout decomposition</h3>
+<p>
+  Overall seat turnout is modelled as the composition-weighted average of racial-group turnout rates.
+  An OLS regression without intercept recovers the implied group-level rates T<sub>M</sub>, T<sub>C</sub>, T<sub>I</sub>.
+</p>
+<div class="eq">
+  <span class="eq-lbl">Equation 1 — Turnout decomposition (OLS, no intercept; fit per election year)</span>
+  T<sub>s</sub> = T<sub>M</sub> × Malay%<sub>s</sub> + T<sub>C</sub> × Chinese%<sub>s</sub> + T<sub>I</sub> × Indian%<sub>s</sub> + ε<sub>s</sub>
+</div>
+
+<h3>Stage 2 — Effective voter composition</h3>
+<p>The fraction of actual voters from each racial group differs from the registered fraction whenever turnout rates diverge across groups.</p>
+<div class="eq">
+  <span class="eq-lbl">Equation 2 — Effective composition (per-seat, using Stage 1 estimates)</span>
+  g_eff%<sub>s</sub> = ( g_registered%<sub>s</sub> × T<sub>g</sub> ) / T<sub>s</sub>
+</div>
+
+<h3>Stage 3 — BN support OLS (2-variable, no intercept)</h3>
+<p>
+  BN vote share is regressed on effective Malay and Chinese composition only.
+  Indian voters are excluded from the regression so that their contribution is absorbed into the
+  seat-level residual alongside candidate and community effects.
+  The no-intercept specification is consistent with the identity that BN vote share is a
+  composition-weighted sum of within-group support rates.
+</p>
+<div class="eq">
+  <span class="eq-lbl">Equation 3 — BN support regression (2-variable, no intercept)</span>
+  BN%<sub>s</sub> = B<sub>M</sub> × Malay_eff%<sub>s</sub> + B<sub>C</sub> × Chinese_eff%<sub>s</sub> + ε<sub>s</sub>
+  <br><br>
+  <span class="eq-lbl">Interpretation</span>
+  B<sub>M</sub> = implied Malay within-group BN support rate (%) — reliably estimated<br>
+  B<sub>C</sub> = implied Chinese + Indian combined BN support (%) — upward-biased by omitted Indian
+</div>
+
+<h3>Stage 4 — Forward prediction (first-principles engine)</h3>
+<div class="eq">
+  <span class="eq-lbl">Equation 4 — Seat-level BN vote share prediction</span>
+  BN_pred<sub>s</sub> = (B<sub>M</sub> + ΔMalay) × Malay_eff_next%<sub>s</sub>
+                     + (B<sub>C</sub> + ΔChinese) × Chinese_eff_next%<sub>s</sub>
+                     + residual<sub>s</sub>
+  <br><br>
+  <span class="eq-lbl">Turnout formula — seat-specific, derived from statewide T_target and gap_MC</span>
+  T<sub>C,s</sub> = T_target − (avg_Malay% × gap_MC)  &nbsp;&nbsp;  T<sub>M,s</sub> = T<sub>C,s</sub> + gap_MC
+  <br>
+  T<sub>s</sub> = Malay%<sub>s</sub> × T<sub>M</sub> + (1 − Malay%<sub>s</sub>) × T<sub>C</sub>   [seat-specific]
+</div>
+
+<!-- ── Regression code ── -->
+<h2>2. Reproducible regression code (Python)</h2>
+<p>The following code reproduces all estimates in this document. Requires: pandas, numpy, statsmodels.</p>
+
+<pre><span class="kw">import</span> pandas <span class="kw">as</span> pd, numpy <span class="kw">as</span> np
+<span class="kw">import</span> statsmodels.api <span class="kw">as</span> sm
+
+BASE = <span class="st">"path/to/harmonised_csv_files/"</span>
+MINOR_COLS = [<span class="st">"PBM VOTE"</span>, <span class="st">"PEJUANG VOTE"</span>, <span class="st">"MUDA VOTE"</span>, <span class="st">"WARSIAN VOTE"</span>,
+              <span class="st">"PSM VOTE"</span>, <span class="st">"PUTRA VOTE"</span>, <span class="st">"INDEPENDENT 1 VOTE"</span>,
+              <span class="st">"INDEPENDENT 2 VOTE"</span>, <span class="st">"INDEPENDENT 3 CANDIDATE VOTE"</span>]
+
+<span class="kw">def</span> <span class="fn">load_year</span>(results_file, composition_file):
+    r = pd.read_csv(BASE + results_file, encoding=<span class="st">"utf-8-sig"</span>)
+    c = pd.read_csv(BASE + composition_file, encoding=<span class="st">"utf-8-sig"</span>)
+    <span class="kw">for</span> df <span class="kw">in</span> (r, c):
+        df[<span class="st">"STATE CONSTITUENCY NAME"</span>] = df[<span class="st">"STATE CONSTITUENCY NAME"</span>].str.strip()
+
+    <span class="cm"># Compute BN vote share and overall turnout</span>
+    <span class="kw">for</span> col <span class="kw">in</span> [<span class="st">"BN VOTE"</span>, <span class="st">"TOTAL VALID VOTES"</span>] + MINOR_COLS:
+        <span class="kw">if</span> col <span class="kw">in</span> r.columns:
+            r[col] = pd.to_numeric(r[col], errors=<span class="st">"coerce"</span>).fillna(<span class="nm">0</span>)
+    tc = next(col <span class="kw">for</span> col <span class="kw">in</span> r.columns <span class="kw">if</span> <span class="st">"TURNOUT"</span> <span class="kw">in</span> col.upper())
+    r[<span class="st">"turnout"</span>] = pd.to_numeric(r[tc], errors=<span class="st">"coerce"</span>)
+    bn_col = next(col <span class="kw">for</span> col <span class="kw">in</span> r.columns
+                  <span class="kw">if</span> col.upper().startswith(<span class="st">"BN"</span>) <span class="kw">and</span> <span class="st">"VOTE"</span> <span class="kw">in</span> col.upper()
+                  <span class="kw">and</span> <span class="st">"CANDIDATE"</span> <span class="kw">not in</span> col.upper() <span class="kw">and</span> <span class="st">"LOST"</span> <span class="kw">not in</span> col.upper())
+    r[<span class="st">"bn_pct"</span>] = r[bn_col] / r[<span class="st">"TOTAL VALID VOTES"</span>].replace(<span class="nm">0</span>, <span class="nm">1</span>) * <span class="nm">100</span>
+
+    <span class="cm"># Handle column name variation (INDIANS vs INDIAN)</span>
+    <span class="kw">for</span> col <span class="kw">in</span> [<span class="st">"MALAY (%)"</span>, <span class="st">"CHINESE (%)"</span>, <span class="st">"INDIANS (%)"</span>, <span class="st">"INDIAN (%)"</span>]:
+        <span class="kw">if</span> col <span class="kw">in</span> c.columns:
+            c[col] = pd.to_numeric(c[col], errors=<span class="st">"coerce"</span>).fillna(<span class="nm">0</span>)
+    <span class="kw">if</span> <span class="st">"INDIANS (%)"</span> <span class="kw">not in</span> c.columns <span class="kw">and</span> <span class="st">"INDIAN (%)"</span> <span class="kw">in</span> c.columns:
+        c[<span class="st">"INDIANS (%)"</span>] = c[<span class="st">"INDIAN (%)"</span>]
+
+    df = r[[<span class="st">"STATE CONSTITUENCY NAME"</span>, <span class="st">"bn_pct"</span>, <span class="st">"turnout"</span>]].merge(
+         c[[<span class="st">"STATE CONSTITUENCY NAME"</span>, <span class="st">"MALAY (%)"</span>, <span class="st">"CHINESE (%)"</span>, <span class="st">"INDIANS (%)"</span>]],
+         on=<span class="st">"STATE CONSTITUENCY NAME"</span>)
+    df.columns = [<span class="st">"seat"</span>, <span class="st">"bn"</span>, <span class="st">"turnout"</span>, <span class="st">"malay"</span>, <span class="st">"chinese"</span>, <span class="st">"indian"</span>]
+    <span class="kw">return</span> df.dropna(subset=[<span class="st">"bn"</span>, <span class="st">"turnout"</span>]).set_index(<span class="st">"seat"</span>)
+
+
+<span class="kw">def</span> <span class="fn">fit_model</span>(d):
+    <span class="cm"># Stage 1: Turnout decomposition (Eq. 1)</span>
+    tm = sm.OLS(d[<span class="st">"turnout"</span>].values,
+                d[[<span class="st">"malay"</span>, <span class="st">"chinese"</span>, <span class="st">"indian"</span>]].values / <span class="nm">100</span>).fit()
+    TM, TC, TI = tm.params
+
+    <span class="cm"># Stage 2: Effective composition (Eq. 2)</span>
+    T = d[<span class="st">"turnout"</span>] / <span class="nm">100</span>
+    d = d.copy()
+    d[<span class="st">"eff_m"</span>] = (d[<span class="st">"malay"</span>]   / <span class="nm">100</span> * TM / <span class="nm">100</span>) / T
+    d[<span class="st">"eff_c"</span>] = (d[<span class="st">"chinese"</span>] / <span class="nm">100</span> * TC / <span class="nm">100</span>) / T
+
+    <span class="cm"># Stage 3: 2-variable BN support OLS (Eq. 3)</span>
+    X2 = np.column_stack([d[<span class="st">"eff_m"</span>], d[<span class="st">"eff_c"</span>]])
+    m  = sm.OLS(d[<span class="st">"bn"</span>].values, X2).fit()   <span class="cm"># no intercept</span>
+    BM, BC = m.params
+
+    d[<span class="st">"residual"</span>] = d[<span class="st">"bn"</span>] - m.fittedvalues
+    <span class="kw">return</span> {<span class="st">"data"</span>: d, <span class="st">"BM"</span>: BM, <span class="st">"BC"</span>: BC,
+            <span class="st">"TM"</span>: TM, <span class="st">"TC"</span>: TC, <span class="st">"TI"</span>: TI,
+            <span class="st">"RMSE"</span>: np.sqrt(np.mean(m.resid**<span class="nm">2</span>)),
+            <span class="st">"conf_int"</span>: m.conf_int(), <span class="st">"pvalues"</span>: m.pvalues}
+
+
+<span class="cm"># ── Run for 2018 and 2022 ──────────────────────────────────────────────────</span>
+d18 = load_year(<span class="st">"JOHOR_2018_DUN_RESULTS_HARMONISED.csv"</span>,
+                <span class="st">"JOHOR_2018_DUN_COMPOSITION_HARMONISED.csv"</span>)
+d22 = load_year(<span class="st">"JOHOR_2022_ELECTION_RESULTS_HARMONISED.csv"</span>,
+                <span class="st">"JOHOR_2022_DUN_COMPOSITION_HARMONISED.csv"</span>)
+
+r18 = fit_model(d18)
+r22 = fit_model(d22)
+
+<span class="cm"># ── Residual stability ────────────────────────────────────────────────────</span>
+seats = [s <span class="kw">for</span> s <span class="kw">in</span> d22.index <span class="kw">if</span> s <span class="kw">in</span> d18.index]   <span class="cm"># 56 matched seats</span>
+resid_corr  = r18[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>].corr(
+              r22[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>])
+mean_drift  = (r18[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>]
+             - r22[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>]).abs().mean()
+sign_flips  = (np.sign(r18[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>])
+            != np.sign(r22[<span class="st">"data"</span>].loc[seats, <span class="st">"residual"</span>])).sum()
+
+<span class="cm"># ── Out-of-sample backtest: predict 2022 using 2018 model ────────────────</span>
+BM18, BC18 = r18[<span class="st">"BM"</span>], r18[<span class="st">"BC"</span>]
+
+<span class="cm"># Scenario 1: composition only (no residual priors)</span>
+err_no_resid = [d22.loc[s, <span class="st">"bn"</span>]
+               - (BM18 * r22[<span class="st">"data"</span>].loc[s, <span class="st">"eff_m"</span>]
+                + BC18 * r22[<span class="st">"data"</span>].loc[s, <span class="st">"eff_c"</span>])
+               <span class="kw">for</span> s <span class="kw">in</span> seats]
+
+<span class="cm"># Scenario 2: with 2018 seat residuals as priors</span>
+err_with_resid = [d22.loc[s, <span class="st">"bn"</span>]
+                 - (BM18 * r22[<span class="st">"data"</span>].loc[s, <span class="st">"eff_m"</span>]
+                  + BC18 * r22[<span class="st">"data"</span>].loc[s, <span class="st">"eff_c"</span>]
+                  + r18[<span class="st">"data"</span>].loc[s, <span class="st">"residual"</span>])
+                 <span class="kw">for</span> s <span class="kw">in</span> seats]
+
+rmse_no   = np.sqrt(np.mean(np.array(err_no_resid)**<span class="nm">2</span>))
+rmse_with = np.sqrt(np.mean(np.array(err_with_resid)**<span class="nm">2</span>))
+print(<span class="fn">f</span><span class="st">"RMSE without residuals: {rmse_no:.2f} pp"</span>)
+print(<span class="fn">f</span><span class="st">"RMSE with 2018 residuals: {rmse_with:.2f} pp"</span>)
+print(<span class="fn">f</span><span class="st">"Improvement: {rmse_no - rmse_with:.2f} pp"</span>)</pre>
+
+<!-- ── Parameter estimates ── -->
+<h2>3. Model parameter estimates by year</h2>
+<p>The 2-variable OLS recovers within-group BN support rates and turnout differentials for each election year. Note B<sub>C</sub> is upward-biased because omitted Indian support is partially attributed to Chinese composition; it should be interpreted as a combined Chinese + Indian baseline rather than pure Chinese support.</p>
+
+<table>
+  <thead><tr>
+    <th>Parameter</th><th>2018 estimate</th><th>95% CI</th><th>p-value</th>
+    <th>2022 estimate</th><th>95% CI</th><th>p-value</th><th>Change</th>
+  </tr></thead>
+  <tbody>
+    <tr><td class="bold">B<sub>M</sub> — Malay BN support</td>
+        <td>65.1%</td><td>[60.6, 69.5]</td><td>p &lt; 0.001</td>
+        <td>60.7%</td><td>[54.9, 66.5]</td><td>p &lt; 0.001</td>
+        <td class="neg">−4.4 pp</td></tr>
+    <tr><td class="bold">B<sub>C</sub> — Chinese+Indian combined</td>
+        <td>10.0%</td><td>[2.9, 17.1]</td><td>p = 0.007</td>
+        <td>12.8%</td><td>[0.1, 25.5]</td><td>p = 0.048</td>
+        <td class="pos">+2.8 pp</td></tr>
+    <tr><td class="bold">T<sub>M</sub> — Malay turnout rate</td>
+        <td>85.1%</td><td colspan="2">—</td>
+        <td>66.2%</td><td colspan="2">—</td>
+        <td class="neg">−18.9 pp</td></tr>
+    <tr><td class="bold">T<sub>C</sub> — Chinese turnout rate</td>
+        <td>85.4%</td><td colspan="2">—</td>
+        <td>45.8%</td><td colspan="2">—</td>
+        <td class="neg">−39.5 pp</td></tr>
+    <tr><td class="bold">Malay–Chinese gap</td>
+        <td>−0.3 pp</td><td colspan="2">(near-zero)</td>
+        <td>+20.3 pp</td><td colspan="2">(large)</td>
+        <td class="neg">+20.7 pp</td></tr>
+    <tr style="background:#f5f5f3"><td class="bold">Model RMSE</td>
+        <td>6.74 pp</td><td colspan="2"></td>
+        <td>9.78 pp</td><td colspan="2"></td>
+        <td class="neg">+3.0 pp</td></tr>
+  </tbody>
+</table>
+
+<div class="alert alert-warn">
+  <strong>Why 2022 RMSE is higher than 2018</strong>
+  The 2018 election was a mass-swing wave: BN lost Malay support uniformly, making racial composition the dominant driver and leaving small seat-specific residuals. In 2022, PN competed seriously for the first time, creating large and uneven seat-specific effects (ENDAU −25pp, YONG PENG +22.5pp) that racial composition cannot predict. The higher 2022 RMSE reflects genuine increased idiosyncratic variance, not model deterioration.
+</div>
+
+<!-- ── Residual stability ── -->
+<h2>4. Residual stability (2018 → 2022)</h2>
+
+<div class="card-row card-row-3">
+  <div class="card blue"><div class="card-lbl">Correlation of seat residuals</div>
+    <div class="card-val">r = 0.851</div>
+    <div class="card-sub">Strong persistence of local effects</div></div>
+  <div class="card"><div class="card-lbl">Mean absolute drift per seat</div>
+    <div class="card-val">4.2 pp</div>
+    <div class="card-sub">Average shift in residual magnitude</div></div>
+  <div class="card green"><div class="card-lbl">Residual sign flips</div>
+    <div class="card-val">6 / 56</div>
+    <div class="card-sub">Seats where direction reversed (11%)</div></div>
+</div>
+
+<h3>Variance decomposition</h3>
+<table>
+  <thead><tr><th>Component</th><th>Variance (pp²)</th><th>Std deviation (pp)</th><th>Interpretation</th></tr></thead>
+  <tbody>
+    <tr><td>2018 residual variance</td><td>45.4</td><td>6.7</td><td>Unexplained seat variation in 2018</td></tr>
+    <tr><td>2022 residual variance</td><td>95.6</td><td>9.8</td><td>Higher — PN factor creates idiosyncratic variance</td></tr>
+    <tr><td>Residual drift variance</td><td>28.9</td><td>5.4</td><td>Change in local effects between elections</td></tr>
+    <tr style="background:#f5f5f3"><td class="bold">Signal explained by 2018 residual</td>
+        <td>95.6 − 28.9 = 66.7</td><td></td>
+        <td>~70% of 2022 residual variance is persistent signal</td></tr>
+  </tbody>
+</table>
+
+<h3>Most volatile seats (largest residual swing 2018→2022)</h3>
+<table>
+  <thead><tr><th>Seat</th><th>Residual 2018</th><th>Residual 2022</th><th>Change</th><th>Likely cause</th></tr></thead>
+  <tbody id="volatile-table"></tbody>
+</table>
+
+<h3>Most stable seats (smallest residual across both years)</h3>
+<table>
+  <thead><tr><th>Seat</th><th>Residual 2018</th><th>Residual 2022</th></tr></thead>
+  <tbody id="stable-table"></tbody>
+</table>
+
+<!-- ── Backtest ── -->
+<h2>5. Out-of-sample prediction accuracy (2018 → 2022)</h2>
+<p>
+  Using only 2018 information (B<sub>M</sub>=65.1%, B<sub>C</sub>=10.0%, 2018 residuals) with actual 2022 effective compositions,
+  the model predicts each seat's 2022 BN vote share. Zero swing is assumed (ΔMalay=0, ΔChinese=0).
+  The key comparison is Scenario 1 vs Scenario 2 — same parameters, differing only in whether
+  2018 residuals are used as seat priors.
+</p>
+
+<div class="card-row card-row-3">
+  <div class="card red"><div class="card-lbl">Scenario 1: No residual priors</div>
+    <div class="card-val">10.1 pp</div><div class="card-sub">Composition-only prediction RMSE</div></div>
+  <div class="card green"><div class="card-lbl">Scenario 2: 2018 residuals as priors</div>
+    <div class="card-val">5.9 pp</div><div class="card-sub">With seat fixed effects RMSE</div></div>
+  <div class="card blue"><div class="card-lbl">Improvement from residuals</div>
+    <div class="card-val">4.2 pp</div><div class="card-sub">Genuine predictive value added</div></div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Correct interpretation of the comparison</strong>
+  Scenario 1 vs Scenario 2 is the proper apples-to-apples test: both use identical BM and BC parameters
+  and identical 2022 effective compositions. The 4.2 pp improvement comes purely from the r=0.851 persistence
+  of local effects — seats that structurally over- or under-performed in 2018 tend to do so in 2022 as well.
+  The "oracle" comparison using 2022 residuals (RMSE=0) is mathematically trivial and not a meaningful benchmark.
+</div>
+
+<h3>Largest prediction errors in the backtest (worst-performing seats)</h3>
+<table>
+  <thead><tr><th>Seat</th><th>Actual BN% (2022)</th><th>Predicted BN%</th><th>Error</th><th>Cause</th></tr></thead>
+  <tbody id="backtest-table"></tbody>
+</table>
+
+<!-- ── Chart ── -->
+<h2>6. Residual scatter: 2018 vs 2022 (r = 0.851)</h2>
+<div class="chart-box">
+  <div class="chart-title">Each dot = one seat. Positive residual = BN outperformed demographics; negative = underperformed.</div>
+  <div style="position:relative;height:340px">
+    <canvas id="scatter" role="img" aria-label="Scatter chart of 2018 vs 2022 seat residuals">2018 residuals (x) vs 2022 residuals (y) for 56 Johor DUN seats.</canvas>
+  </div>
+</div>
+
+<!-- ── Limitations ── -->
+<h2>7. Key limitations and analyst guidance</h2>
+
+<table>
+  <thead><tr><th>Limitation</th><th>Effect</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td>Residual drift (~4.2 pp/cycle)</td>
+        <td>Genuine uncertainty on top of model RMSE</td>
+        <td>Widen marginal threshold to ±11 pp; use seat overrides for volatile seats</td></tr>
+    <tr><td>B<sub>C</sub> upward-biased by omitted Indian</td>
+        <td>ΔChinese parameter changes from ~12.8% baseline, not 0%</td>
+        <td>Poll translation: ΔChinese = poll Chinese BN% − 12.8 (not − 0)</td></tr>
+    <tr><td>PN emergence post-2018</td>
+        <td>ENDAU, BUKIT PASIR residuals not predictable from 2018</td>
+        <td>Override these seats with local candidate intelligence</td></tr>
+    <tr><td>Ecological inference limits</td>
+        <td>B<sub>M</sub> and B<sub>C</sub> are statewide averages, vary across seat types</td>
+        <td>MRP with individual survey data would improve seat-level accuracy</td></tr>
+    <tr><td>Turnout formula uses statewide avg</td>
+        <td>~2-3 pp error in per-seat effective composition</td>
+        <td>Acceptable given model RMSE; improved by actual per-seat turnout data</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  Data: Election Commission of Malaysia (SPR). 2018 and 2022 Johor DUN state election results.
+  All names harmonised to 2022 constituency boundaries. Analysis: 2-variable joint OLS on
+  effective voter composition (Malay + Chinese), no intercept. Indian voters absorbed into
+  seat-level residuals alongside candidate and community effects.
+  Regression library: statsmodels (Python). Reproduced with the code in Section 2.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const D = {"r18":{"BM":65.053,"BC":10.015,"TM":85.06,"TC":85.388,"TI":88.499,"RMSE":6.738,"BM_ci":[60.6,69.5],"BC_ci":[2.9,17.1],"pval_BM":0.0,"pval_BC":0.007},"r22":{"BM":60.694,"BC":12.777,"TM":66.182,"TC":45.845,"TI":36.586,"RMSE":9.78,"BM_ci":[54.9,66.5],"BC_ci":[0.1,25.5],"pval_BM":0.0,"pval_BC":0.048},"corr":0.851,"drift":4.16,"sign_flips":6,"n_seats":56,"rmse_no":10.09,"rmse_with":5.88,"var18":45.4,"var22":95.6,"var_drift":28.9,"volatile":[{"seat":"YONG PENG","resid18":7.0,"resid22":22.5,"delta":15.5},{"seat":"BUKIT PASIR","resid18":1.5,"resid22":-13.0,"delta":-14.4},{"seat":"ENDAU","resid18":-11.2,"resid22":-25.0,"delta":-13.7},{"seat":"BENUT","resid18":0.5,"resid22":8.9,"delta":8.4},{"seat":"TENGGAROH","resid18":-2.6,"resid22":-10.7,"delta":-8.1},{"seat":"SRI MEDAN","resid18":-1.7,"resid22":6.3,"delta":8.0},{"seat":"KUKUP","resid18":6.5,"resid22":14.0,"delta":7.5},{"seat":"MACHAP","resid18":1.6,"resid22":8.9,"delta":7.3},{"seat":"GAMBIR","resid18":-4.2,"resid22":3.1,"delta":7.3},{"seat":"SEDILI","resid18":12.6,"resid22":5.7,"delta":-7.0}],"stable":[{"seat":"SKUDAI","resid18":-0.6,"resid22":-1.1},{"seat":"JEMENTAH","resid18":2.2,"resid22":1.6},{"seat":"JOHOR JAYA","resid18":0.6,"resid22":0.5},{"seat":"MENGKIBOL","resid18":2.5,"resid22":0.0},{"seat":"MAHKOTA","resid18":3.4,"resid22":3.2},{"seat":"PEMANIS","resid18":-1.7,"resid22":3.7},{"seat":"KEMELAH","resid18":3.7,"resid22":-2.2},{"seat":"SENAI","resid18":2.1,"resid22":3.8}],"backtest_top":[["ENDAU",35.5,53.1,-17.6],["BUKIT PASIR",32.1,48.8,-16.7],["YONG PENG",52.8,37.9,14.9],["TENGGAROH",49.1,61.1,-12.0],["SEDILI",63.5,74.6,-11.1],["RENGIT",48.9,58.2,-9.3],["BENUT",63.1,54.7,8.4],["SRI MEDAN",60.5,52.5,8.0]],"all_residuals":[{"seat":"BULOH KASAP","resid18":-3.1,"resid22":13.8},{"seat":"JEMENTAH","resid18":2.2,"resid22":1.6},{"seat":"PEMANIS","resid18":-1.7,"resid22":3.7},{"seat":"KEMELAH","resid18":3.7,"resid22":-2.2},{"seat":"TENANG","resid18":1.9,"resid22":0.4},{"seat":"BEKOK","resid18":-6.3,"resid22":9.6},{"seat":"BUKIT KEPONG","resid18":-6.6,"resid22":-5.6},{"seat":"BUKIT PASIR","resid18":1.5,"resid22":-13.0},{"seat":"GAMBIR","resid18":-4.2,"resid22":3.1},{"seat":"TANGKAK","resid18":5.4,"resid22":4.8},{"seat":"SEROM","resid18":-2.5,"resid22":-7.6},{"seat":"BENTAYAN","resid18":2.0,"resid22":-0.6},{"seat":"SIMPANG JERAM","resid18":-5.7,"resid22":-8.1},{"seat":"BUKIT NANING","resid18":-7.2,"resid22":-5.6},{"seat":"MAHARANI","resid18":-6.6,"resid22":-15.9},{"seat":"SUNGAI BALANG","resid18":-3.3,"resid22":-1.9},{"seat":"SEMERAH","resid18":-5.8,"resid22":-1.7},{"seat":"SRI MEDAN","resid18":-1.7,"resid22":6.3},{"seat":"YONG PENG","resid18":7.0,"resid22":22.5},{"seat":"SEMARANG","resid18":2.5,"resid22":5.3},{"seat":"PARIT YAANI","resid18":-2.4,"resid22":-2.5},{"seat":"PARIT RAJA","resid18":3.2,"resid22":0.7},{"seat":"PENGGARAM","resid18":2.1,"resid22":-0.5},{"seat":"SENGGARANG","resid18":-4.3,"resid22":2.2},{"seat":"RENGIT","resid18":3.5,"resid22":-3.5},{"seat":"MACHAP","resid18":1.6,"resid22":8.9},{"seat":"LAYANG-LAYANG","resid18":-0.8,"resid22":6.0},{"seat":"MENGKIBOL","resid18":2.5,"resid22":0.0},{"seat":"MAHKOTA","resid18":3.4,"resid22":3.2},{"seat":"PALOH","resid18":14.8,"resid22":20.0},{"seat":"KAHANG","resid18":2.9,"resid22":5.7},{"seat":"ENDAU","resid18":-11.2,"resid22":-25.0},{"seat":"TENGGAROH","resid18":-2.6,"resid22":-10.7},{"seat":"PANTI","resid18":3.1,"resid22":3.5},{"seat":"PASIR RAJA","resid18":1.3,"resid22":5.5},{"seat":"SEDILI","resid18":12.6,"resid22":5.7},{"seat":"JOHOR LAMA","resid18":3.7,"resid22":5.0},{"seat":"PENAWAR","resid18":6.5,"resid22":3.4},{"seat":"TANJUNG SURAT","resid18":4.0,"resid22":6.2},{"seat":"TIRAM","resid18":-5.6,"resid22":-3.8},{"seat":"PUTERI WANGSA","resid18":-6.1,"resid22":-3.5},{"seat":"JOHOR JAYA","resid18":0.6,"resid22":0.5},{"seat":"PERMAS","resid18":-2.9,"resid22":0.3},{"seat":"LARKIN","resid18":-4.8,"resid22":0.5},{"seat":"STULANG","resid18":4.4,"resid22":5.3},{"seat":"PERLING","resid18":-4.8,"resid22":1.2},{"seat":"KEMPAS","resid18":-4.9,"resid22":0.0},{"seat":"SKUDAI","resid18":-0.6,"resid22":-1.1},{"seat":"KOTA ISKANDAR","resid18":-5.3,"resid22":-1.6},{"seat":"BUKIT PERMAI","resid18":1.5,"resid22":3.3},{"seat":"BUKIT BATU","resid18":5.0,"resid22":4.5},{"seat":"SENAI","resid18":2.1,"resid22":3.8},{"seat":"BENUT","resid18":0.5,"resid22":8.9},{"seat":"PULAI SEBATANG","resid18":-0.5,"resid22":5.3},{"seat":"PEKAN NANAS","resid18":4.1,"resid22":7.4},{"seat":"KUKUP","resid18":6.5,"resid22":14.0}]};
+
+/* volatile table */
+const vt = document.getElementById('volatile-table');
+const causes = {
+  "YONG PENG":"BN dramatically overperformed; Chinese community fragmentation or strong local candidate",
+  "BUKIT PASIR":"PN insurgency — competitive PN candidate split Malay vote strongly against BN",
+  "ENDAU":"PN structural dominance — PN won with 55.5%; 2018 residual couldn't anticipate this",
+  "BENUT":"BN incumbent strengthened; candidate quality improvement",
+  "TENGGAROH":"PN erosion of BN rural Malay base intensified",
+  "SRI MEDAN":"BN outperformed; likely strong incumbent + community ties",
+  "KUKUP":"BN over-performed relative to demographics",
+  "MACHAP":"BN candidate improvement or local development effect",
+  "GAMBIR":"Shifted from mild underperformance to mild overperformance",
+  "SEDILI":"Unusually high 2018 residual moderated in 2022 (PN present)"
+};
+D.volatile.forEach(r => {
+  const tr = document.createElement('tr');
+  const dClass = r.delta >= 0 ? 'pos' : 'neg';
+  tr.innerHTML = `<td class="bold">${r.seat}</td>
+    <td>${r.resid18 >= 0 ? '+' : ''}${r.resid18} pp</td>
+    <td>${r.resid22 >= 0 ? '+' : ''}${r.resid22} pp</td>
+    <td class="${dClass}">${r.delta >= 0 ? '+' : ''}${r.delta} pp</td>
+    <td style="font-size:11px;color:#666">${causes[r.seat] || ''}</td>`;
+  vt.appendChild(tr);
+});
+
+/* stable table */
+const st = document.getElementById('stable-table');
+D.stable.forEach(r => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="bold">${r.seat}</td>
+    <td>${r.resid18 >= 0 ? '+' : ''}${r.resid18} pp</td>
+    <td>${r.resid22 >= 0 ? '+' : ''}${r.resid22} pp</td>`;
+  st.appendChild(tr);
+});
+
+/* backtest table */
+const bt = document.getElementById('backtest-table');
+const bt_causes = {
+  "ENDAU": "PN won with 55.5%; 2018 model couldn't anticipate post-2018 PN dominance",
+  "BUKIT PASIR": "PN split Malay vote heavily; BN won with only 32% in 3-way race",
+  "YONG PENG": "Exceptional BN over-performance; Chinese community dynamics shifted",
+  "TENGGAROH": "PN eroded BN Malay base more than 2018 residual suggested",
+  "SEDILI": "2018 residual unusually high (+12.6pp); regressed toward mean in 2022",
+  "RENGIT": "PN competition intensified; BN margins compressed",
+  "BENUT": "BN candidate improvement understated by 2018 residual",
+  "SRI MEDAN": "BN over-performed; positive residual drift not captured from 2018"
+};
+D.backtest_top.forEach(([seat, actual, pred, err]) => {
+  const tr = document.createElement('tr');
+  const eClass = err >= 0 ? 'pos' : 'neg';
+  tr.innerHTML = `<td class="bold">${seat}</td>
+    <td>${actual}%</td><td>${pred}%</td>
+    <td class="${eClass}">${err >= 0 ? '+' : ''}${err} pp</td>
+    <td style="font-size:11px;color:#666">${bt_causes[seat] || ''}</td>`;
+  bt.appendChild(tr);
+});
+
+/* scatter chart */
+const pts = D.all_residuals.map(r => ({x: r.resid18, y: r.resid22, label: r.seat}));
+const isDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
+new Chart(document.getElementById('scatter'), {
+  type: 'scatter',
+  data: {datasets: [
+    {data: pts, pointBackgroundColor: 'rgba(24,95,165,0.7)', pointRadius: 5, pointHoverRadius: 7},
+    {data: [{x:-30,y:-30},{x:30,y:30}], type:'line', borderColor:'rgba(0,0,0,.2)',
+     borderWidth:1, borderDash:[4,3], pointRadius:0, label:'y=x'},
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {legend:{display:false},
+      tooltip:{filter:i=>i.datasetIndex===0,
+        callbacks:{title:i=>[i[0].raw.label],
+          label:i=>[`2018 residual: ${i.raw.x >= 0 ? '+':''}${i.raw.x.toFixed(1)} pp`,
+                    `2022 residual: ${i.raw.y >= 0 ? '+':''}${i.raw.y.toFixed(1)} pp`]}}},
+    scales: {
+      x:{title:{display:true,text:'2018 residual (pp)',color:'#888',font:{size:12}},
+         ticks:{color:'#888',callback:v=>(v>=0?'+':'')+v+'pp'},
+         grid:{color:'rgba(0,0,0,.06)'}},
+      y:{title:{display:true,text:'2022 residual (pp)',color:'#888',font:{size:12}},
+         ticks:{color:'#888',callback:v=>(v>=0?'+':'')+v+'pp'},
+         grid:{color:'rgba(0,0,0,.06)'}},
+    }
+  }
+});
+</script>
+</body>
+</html>

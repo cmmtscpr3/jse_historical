@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Johor DUN — First Principles Prediction Engine</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     background:#f5f5f3;color:#1a1a1a;min-height:100vh;display:flex;flex-direction:column}
+.shell{display:flex;flex:1;min-height:0}
+.sidebar{width:320px;flex-shrink:0;background:#fff;border-right:.5px solid #ddd;
+         overflow-y:auto;padding:1.25rem 1rem 2rem}
+.main{flex:1;overflow-y:auto;padding:1.25rem 1.25rem 2rem;min-width:0}
+
+/* sidebar */
+.sec-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+           color:#888;margin:1.2rem 0 .55rem}
+.sec-title:first-child{margin-top:0}
+.sec-desc{font-size:11px;color:#aaa;margin-bottom:.65rem;line-height:1.45}
+
+/* scenario radios */
+.sc-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;
+        cursor:pointer;font-size:13px;color:#444;border:.5px solid transparent;
+        margin-bottom:4px;transition:background .1s}
+.sc-opt:hover{background:#f0f0f0}
+.sc-opt.active{background:#EBF3FC;border-color:#B5D4F4;color:#185FA5;font-weight:500}
+.sc-opt input{cursor:pointer;margin:0;accent-color:#185FA5}
+
+/* sliders */
+.sl-row{margin-bottom:.7rem}
+.sl-label{display:flex;justify-content:space-between;align-items:baseline;
+          font-size:12px;color:#555;margin-bottom:3px}
+.sl-val{font-weight:600;color:#185FA5;font-size:13px;min-width:44px;text-align:right}
+input[type=range]{width:100%;cursor:pointer;accent-color:#185FA5}
+input[type=range]:disabled{opacity:.35;cursor:not-allowed}
+.sl-hint{font-size:10px;color:#aaa;margin-top:2px;line-height:1.4}
+
+/* override UI */
+.ov-row{display:flex;gap:5px;margin-bottom:.5rem;align-items:center}
+.ov-row select,.ov-row input[type=number]{font-size:12px;border:.5px solid #ccc;
+  border-radius:6px;padding:4px 7px;background:#fff;color:#1a1a1a;font-family:inherit}
+.ov-row select{flex:1;min-width:0}
+.ov-row input[type=number]{width:62px}
+.btn-add{font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;
+         font-family:inherit;border:.5px solid #bbb;background:#f7f7f7;color:#444}
+.btn-add:hover{background:#e8f0fb;border-color:#9bbde0;color:#185FA5}
+.ov-list{list-style:none;margin-top:.4rem}
+.ov-item{display:flex;align-items:center;justify-content:space-between;
+         font-size:12px;background:#f5f5f3;border-radius:5px;
+         padding:4px 8px;margin-bottom:3px;gap:6px}
+.ov-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-val{font-weight:600;color:#185FA5;white-space:nowrap}
+.btn-del{background:none;border:none;cursor:pointer;color:#aaa;font-size:15px;padding:0 2px}
+.btn-del:hover{color:#c0392b}
+.btn-reset{font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;
+           font-family:inherit;border:.5px solid #f09595;background:#fff;
+           color:#c0392b;margin-top:1rem}
+.btn-reset:hover{background:#FCEBEB}
+
+/* summary cards */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1rem}
+.card{background:#fff;border-radius:10px;padding:.85rem 1rem;border:.5px solid #e0e0e0}
+.card-lbl{font-size:11px;color:#888;margin-bottom:4px}
+.card-val{font-size:28px;font-weight:500;line-height:1}
+.card-sub{font-size:11px;color:#888;margin-top:3px}
+.card.good{border-color:#185FA5;background:#EBF3FC}
+.card.good .card-val{color:#185FA5}
+.card.bad{border-color:#D85A30;background:#FEF0EB}
+.card.bad .card-val{color:#D85A30}
+
+/* majority bar */
+.maj-wrap{background:#fff;border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;border:.5px solid #e0e0e0}
+.maj-lbl{font-size:11px;color:#888;margin-bottom:.5rem;display:flex;justify-content:space-between}
+.maj-outer{position:relative;height:22px;background:#f0f0f0;border-radius:5px;overflow:visible}
+.maj-bar{height:100%;border-radius:5px;background:#185FA5;transition:width .4s;min-width:2px}
+.maj-line{position:absolute;top:-4px;bottom:-4px;width:2px;background:#1a1a1a;border-radius:1px}
+.maj-line-lbl{position:absolute;top:-18px;font-size:10px;color:#666;white-space:nowrap;transform:translateX(-50%)}
+
+/* seat strip */
+.strip-wrap{background:#fff;border-radius:10px;padding:.85rem 1rem 1rem;margin-bottom:1rem;border:.5px solid #e0e0e0}
+.strip-ttl{font-size:11px;color:#888;margin-bottom:.5rem}
+.strip{display:flex;gap:2px;overflow-x:auto;padding-bottom:6px}
+.strip-tile{width:18px;height:28px;border-radius:2px;flex-shrink:0;cursor:default;transition:transform .1s}
+.strip-tile:hover{transform:scaleY(1.15)}
+.maj-marker{width:2px;height:34px;background:#1a1a1a;flex-shrink:0;border-radius:1px;position:relative;align-self:center}
+.maj-marker::after{content:"29";position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:9px;color:#666}
+
+/* marginal badge */
+.badge-marg{display:inline-block;background:#FEF9EC;border:.5px solid #EF9F27;color:#633806;
+            font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
+.badge-conf{display:inline-block;background:#EBF3FC;border:.5px solid #B5D4F4;color:#0C447C;
+            font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
+
+/* tabs */
+.tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #eee}
+.tab{padding:7px 18px;font-size:13px;cursor:pointer;border:none;background:none;
+     font-family:inherit;color:#777;border-bottom:2px solid transparent;
+     margin-bottom:-2px;transition:color .12s,border-color .12s}
+.tab.active{color:#185FA5;border-bottom-color:#185FA5;font-weight:500}
+.tab-panel{display:none;padding-top:1rem}
+.tab-panel.active{display:block}
+
+/* chart scroll */
+.chart-scroll{height:520px;overflow-y:auto;overflow-x:hidden}
+
+/* table */
+.tbl-ctrls{display:flex;gap:8px;margin-bottom:.6rem;flex-wrap:wrap}
+.tbl-f{font-size:12px;padding:4px 10px;border:.5px solid #ccc;border-radius:6px;
+       background:#fff;cursor:pointer;color:#555;font-family:inherit;transition:background .1s}
+.tbl-f.active{background:#185FA5;border-color:#185FA5;color:#fff}
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:.5px solid #e0e0e0}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f5f5f3;font-weight:500;text-align:left;padding:7px 10px;
+   border-bottom:1px solid #ddd;cursor:pointer;user-select:none;white-space:nowrap;
+   position:sticky;top:0;z-index:1}
+th:hover{background:#ebebeb}
+th .si{color:#aaa;margin-left:3px;font-size:10px}
+td{padding:6px 10px;border-bottom:.5px solid #f0f0f0;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.bn-safe     td:first-child{border-left:3px solid #0C447C}
+tr.bn-likely   td:first-child{border-left:3px solid #378ADD}
+tr.marginal    td:first-child{border-left:3px solid #BA7517}
+tr.bn-unlikely td:first-child{border-left:3px solid #D85A30}
+tr.safe-loss   td:first-child{border-left:3px solid #A32D2D}
+tr:hover td{background:#fafafa}
+.w-bn{color:#185FA5;font-weight:500}.w-opp{color:#A32D2D;font-weight:500}
+.dp{color:#1D9E75}.dn{color:#c0392b}
+.marg-tag{font-size:10px;background:#FEF9EC;border:.5px solid #EF9F27;color:#633806;
+          padding:1px 5px;border-radius:3px;margin-left:4px}
+
+/* residuals + opp split sections */
+.resid-note{font-size:12px;color:#666;margin-bottom:.75rem;line-height:1.55}
+.rmse-badge{display:inline-block;background:#f5f5f3;border:.5px solid #ccc;
+            border-radius:5px;padding:2px 8px;font-size:12px;font-weight:500}
+
+/* tooltip */
+#tipbox{position:fixed;pointer-events:none;background:rgba(255,255,255,.97);
+        border:.5px solid #ccc;border-radius:8px;padding:8px 12px;font-size:12px;
+        display:none;z-index:9999;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.12);line-height:1.6}
+
+footer{font-size:10px;color:#aaa;padding:.75rem 1.25rem;border-top:.5px solid #e0e0e0;background:#fff;flex-shrink:0}
+</style>
+</head>
+<body>
+<div id="tipbox"></div>
+
+<div class="shell">
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<aside class="sidebar">
+
+<div class="sec-title">Coalition configuration</div>
+<label class="sc-opt active" id="lbl-3way"><input type="radio" name="sc" value="3way" checked> 3-way — BN vs PH vs PN</label>
+<label class="sc-opt" id="lbl-opp"><input type="radio" name="sc" value="opp"> United opposition — PH + PN</label>
+<label class="sc-opt" id="lbl-bnpn"><input type="radio" name="sc" value="bnpn"> BN + PN pact — vs PH</label>
+
+<div class="sec-title" style="margin-top:1.1rem">Transfer parameters
+  <span id="te-note" style="font-size:10px;font-weight:400;color:#bbb"> — n/a for 3-way</span>
+</div>
+<div class="sl-row">
+  <div class="sl-label"><span>Transfer efficiency</span><span class="sl-val" id="te-out">82%</span></div>
+  <input type="range" id="te" min="60" max="97" step="1" value="82" disabled>
+  <p class="sl-hint">Fraction of PN votes following the coalition directive.</p>
+</div>
+<div class="sl-row">
+  <div class="sl-label"><span id="dtb-lbl">Defection to BN</span><span class="sl-val" id="dtb-out">25%</span></div>
+  <input type="range" id="dtb" min="5" max="45" step="1" value="25" disabled>
+  <p class="sl-hint" id="dtb-hint">Of PN voters not following the pact, fraction voting BN rather than abstaining.</p>
+</div>
+
+<div class="sec-title" style="margin-top:1.1rem">Malay opposition alignment</div>
+<p class="sec-desc">% of non-BN Malay votes going to PH (remainder to PN). Higher = PH-leaning Malay opposition.</p>
+<div class="sl-row">
+  <div class="sl-label"><span>Rural seats</span><span class="sl-val" id="alm-r-out">26%</span></div>
+  <input type="range" id="alm-r" min="5" max="75" step="1" value="26">
+  <p class="sl-hint">At 26% (2022 default) the 2022 opposition split is reproduced exactly. Higher = more Malay opposition votes shift to PH.</p>
+</div>
+<div class="sl-row">
+  <div class="sl-label"><span>Urban / semi-urban seats</span><span class="sl-val" id="alm-u-out">49%</span></div>
+  <input type="range" id="alm-u" min="15" max="85" step="1" value="49">
+  <p class="sl-hint">At 49% (2022 default) the 2022 opposition split is reproduced exactly. Higher = more Malay opposition votes shift to PH.</p>
+</div>
+
+<div class="sec-title" style="margin-top:1.1rem">Turnout scenario</div>
+<div class="sl-row">
+  <div class="sl-label"><span>Expected overall turnout</span><span class="sl-val" id="turnout-out">56%</span></div>
+  <input type="range" id="turnout" min="40" max="92" step="1" value="56">
+  <p class="sl-hint">2022 snap election: 56%. 2013/2018: ~85%. Normal state election: ~80%.</p>
+</div>
+<div class="sl-row">
+  <div class="sl-label"><span>Malay–Chinese turnout gap</span><span class="sl-val" id="gap-out">20 pp</span></div>
+  <input type="range" id="gap" min="0" max="25" step="1" value="20">
+  <p class="sl-hint">0 pp = equal participation (2013/2018 pattern). 20 pp = 2022 snap election pattern.</p>
+</div>
+
+<div class="sec-title" style="margin-top:1.1rem">Changes in BN support vs 2022</div>
+<p class="sec-desc">ΔMalay = poll Malay BN% − 60.7. ΔChinese adjusts from the ~12.8% baseline (which absorbs Indian voter support via the 2-variable model). Indian voters are fully captured in the 2022 seat residual.</p>
+<div class="sl-row">
+  <div class="sl-label"><span>ΔMalay</span><span class="sl-val" id="dm-out">0.0 pp</span></div>
+  <input type="range" id="dm" min="-12" max="12" step="0.5" value="0">
+</div>
+<div class="sl-row">
+  <div class="sl-label"><span>ΔChinese</span><span class="sl-val" id="dc-out">0.0 pp</span></div>
+  <input type="range" id="dc" min="-5" max="15" step="0.5" value="0">
+</div>
+
+<div class="sec-title" style="margin-top:1.1rem">Seat-specific overrides</div>
+<p class="sec-desc">Override BN% for individual seats (candidate effects, local intelligence). Bypasses model entirely.</p>
+<div class="ov-row">
+  <select id="ov-seat"><option value="">— select seat —</option></select>
+  <input type="number" id="ov-val" min="0" max="100" step="0.5" placeholder="BN%">
+  <button class="btn-add" id="btn-add-ov">Add</button>
+</div>
+<ul class="ov-list" id="ov-list"></ul>
+<button class="btn-reset" id="btn-reset">Reset all</button>
+
+</aside>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<main class="main">
+
+<div class="cards" id="cards">
+  <div class="card"><div class="card-lbl">BN seats predicted</div><div class="card-val" id="c-bn">—</div><div class="card-sub" id="c-bn-sub"></div></div>
+  <div class="card"><div class="card-lbl">Opposition seats</div><div class="card-val" id="c-opp">—</div><div class="card-sub" id="c-opp-sub"></div></div>
+  <div class="card" id="c-maj-card"><div class="card-lbl">Simple majority (29)</div><div class="card-val" id="c-maj">—</div><div class="card-sub" id="c-maj-sub"></div></div>
+</div>
+
+<div class="maj-wrap">
+  <div class="maj-lbl"><span>Seat allocation</span><span>56 seats · majority at 29</span></div>
+  <div class="maj-outer" id="maj-outer">
+    <div class="maj-bar" id="maj-bar" style="width:0%"></div>
+    <div class="maj-line" id="maj-line" style="left:50.9%"><div class="maj-line-lbl">29</div></div>
+  </div>
+</div>
+
+<div class="strip-wrap">
+  <div class="strip-ttl">Seats sorted by predicted BN margin · hover for details · <span class="badge-marg">± amber = marginal (within ±9 pp RMSE)</span></div>
+  <div class="strip" id="strip"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="predict">Predictions</button>
+  <button class="tab" data-tab="resid">2022 residuals</button>
+  <button class="tab" data-tab="oppsplit">2022 opposition split</button>
+</div>
+
+<!-- Predictions tab -->
+<div class="tab-panel active" id="tab-predict">
+  <div class="tbl-ctrls">
+    <button class="tbl-f active" data-f="all">All</button>
+    <button class="tbl-f" data-f="bn">BN wins</button>
+    <button class="tbl-f" data-f="opp">Opp wins</button>
+    <button class="tbl-f" data-f="marg">Marginal</button>
+  </div>
+  <div class="tbl-wrap">
+    <table><thead><tr>
+      <th data-col="name">Seat <span class="si">↕</span></th>
+      <th data-col="race">Composition <span class="si">↕</span></th>
+      <th data-col="ur">UR <span class="si">↕</span></th>
+      <th data-col="bn22">2022 BN% <span class="si">↕</span></th>
+      <th data-col="bn_pred">Pred BN% <span class="si">↕</span></th>
+      <th data-col="margin_pp">Margin <span class="si">↕</span></th>
+      <th data-col="residual22">2022 residual <span class="si">↕</span></th>
+      <th data-col="winner">Outcome <span class="si">↕</span></th>
+    </tr></thead><tbody id="tbl-body"></tbody></table>
+  </div>
+</div>
+
+<!-- Residuals tab -->
+<div class="tab-panel" id="tab-resid">
+  <p class="resid-note">
+    Each seat's <strong>2022 residual</strong> = actual BN% − first-principles model fit (BM×Malay_eff + BC×Chinese_eff).
+    The residual captures Indian voter contributions, candidate effects, and local community dynamics not explained by racial composition alone.
+    Model RMSE = <span class="rmse-badge" id="rmse-badge">—</span>.
+    <strong>Seats with large positive residuals</strong> (BN outperformed) may have unusually strong BN candidates or community ties.
+    <strong>Large negative residuals</strong> (BN underperformed) may reflect strong opposition candidates, local grievances, or other factors.
+    Analysts should scrutinise these seats and consider applying seat overrides where there is specific intelligence.
+  </p>
+  <div style="height:600px;overflow-y:auto;overflow-x:hidden">
+    <div style="position:relative;height:1100px">
+      <canvas id="residChart" role="img" aria-label="2022 seat residuals bar chart">2022 residuals for all 56 Johor DUN seats.</canvas>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- Opposition split tab -->
+<div class="tab-panel" id="tab-oppsplit">
+  <p class="resid-note">
+    In 2022, non-BN votes split between PH and PN very differently depending on seat type.
+    This is the <strong>baseline distribution</strong> that the Malay alignment sliders shift from.
+    Rural seats are PN-dominated (26% PH); urban seats are more evenly split (57% PH).
+    The Chinese voter pool overwhelmingly favours PH — this is held fixed without a slider.
+  </p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+    <div style="background:#f9f9f7;border-radius:8px;padding:.85rem .9rem .7rem">
+      <div style="font-size:12px;font-weight:500;color:#555;margin-bottom:.4rem">PH fraction of non-BN votes by UR class (2022)</div>
+      <div style="position:relative;height:180px"><canvas id="urSplitChart" role="img" aria-label="PH fraction by urban-rural">PH fraction of non-BN votes by UR class.</canvas></div>
+    </div>
+    <div style="background:#f9f9f7;border-radius:8px;padding:.85rem .9rem .7rem">
+      <div style="font-size:12px;font-weight:500;color:#555;margin-bottom:.4rem">PH fraction of non-BN votes by composition group (2022)</div>
+      <div style="position:relative;height:180px"><canvas id="raceSplitChart" role="img" aria-label="PH fraction by racial composition">PH fraction of non-BN votes by racial composition group.</canvas></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<footer>
+  First-principles model: BN_pred = BM×Malay_eff + BC×Chinese_eff + seat_residual_2022.
+  BM=60.7%, BC=0% (3-variable joint OLS on effective voter composition, 2022 Johor DUN).
+  RMSE ≈ 9.2 pp. Marginal seats = within ±RMSE of win/loss threshold. Indian voters absorbed into seat residual.
+  Opposition distribution based on 2022 PH/PN/other fractions, adjusted by Malay alignment sliders.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const ENGINE_DATA={"seats":[{"name":"BULOH KASAP","bn22":56.96,"ph22":22.76,"pn22":19.07,"oth22":1.21,"turnout22":57.1,"malay":56.9,"chinese":31.6,"indian":10.9,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":66.02,"eff_c22":25.34,"eff_i22":7.01,"residual22":13.65,"bn_fitted22":43.31,"ph_opp_frac":0.5288,"pn_opp_frac":0.4431,"ot_opp_frac":0.0281},{"name":"JEMENTAH","bn22":37.63,"ph22":40.92,"pn22":21.45,"oth22":0.0,"turnout22":53.7,"malay":40.8,"chinese":50.5,"indian":8.0,"ur":"SEMI URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":50.26,"eff_c22":43.05,"eff_i22":5.43,"residual22":1.63,"bn_fitted22":36.0,"ph_opp_frac":0.656,"pn_opp_frac":0.344,"ot_opp_frac":0.0},{"name":"PEMANIS","bn22":50.33,"ph22":26.05,"pn22":22.19,"oth22":1.43,"turnout22":59.0,"malay":63.6,"chinese":33.4,"indian":2.4,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":71.38,"eff_c22":25.98,"eff_i22":1.46,"residual22":3.69,"bn_fitted22":46.64,"ph_opp_frac":0.5245,"pn_opp_frac":0.4467,"ot_opp_frac":0.0288},{"name":"KEMELAH","bn22":41.13,"ph22":32.32,"pn22":25.38,"oth22":1.17,"turnout22":55.7,"malay":54.3,"chinese":39.5,"indian":5.4,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-MIC","eff_m22":64.51,"eff_c22":32.48,"eff_i22":3.57,"residual22":-2.17,"bn_fitted22":43.3,"ph_opp_frac":0.549,"pn_opp_frac":0.4311,"ot_opp_frac":0.0199},{"name":"TENANG","bn22":44.92,"ph22":0.0,"pn22":22.79,"oth22":32.3,"turnout22":54.5,"malay":49.2,"chinese":37.9,"indian":11.2,"ur":"RURAL","ur_group":"rural","race":"Mixed (no race >50%)","winner22":"BN-UMNO","eff_m22":59.74,"eff_c22":31.93,"eff_i22":7.5,"residual22":4.58,"bn_fitted22":40.34,"ph_opp_frac":0.0,"pn_opp_frac":0.4137,"ot_opp_frac":0.5863},{"name":"BEKOK","bn22":51.31,"ph22":25.28,"pn22":21.01,"oth22":2.41,"turnout22":51.3,"malay":30.3,"chinese":48.8,"indian":18.4,"ur":"SEMI URBAN","ur_group":"urban","race":"Mixed (no race >50%)","winner22":"BN-MCA","eff_m22":39.03,"eff_c22":43.56,"eff_i22":13.11,"residual22":22.05,"bn_fitted22":29.26,"ph_opp_frac":0.5192,"pn_opp_frac":0.4314,"ot_opp_frac":0.0494},{"name":"BUKIT KEPONG","bn22":41.08,"ph22":0.0,"pn22":44.27,"oth22":14.65,"turnout22":61.0,"malay":70.3,"chinese":26.1,"indian":2.7,"ur":"RURAL","ur_group":"rural","race":"Malay (70-79%)","winner22":"PN-PPBM","eff_m22":76.28,"eff_c22":19.6,"eff_i22":1.64,"residual22":-7.72,"bn_fitted22":48.8,"ph_opp_frac":0.0,"pn_opp_frac":0.7514,"ot_opp_frac":0.2486},{"name":"BUKIT PASIR","bn22":32.11,"ph22":24.82,"pn22":31.06,"oth22":12.01,"turnout22":59.9,"malay":62.3,"chinese":33.1,"indian":4.2,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":68.9,"eff_c22":25.35,"eff_i22":2.54,"residual22":-12.95,"bn_fitted22":45.06,"ph_opp_frac":0.3656,"pn_opp_frac":0.4574,"ot_opp_frac":0.1769},{"name":"GAMBIR","bn22":45.48,"ph22":25.76,"pn22":27.5,"oth22":1.26,"turnout22":61.3,"malay":59.4,"chinese":36.5,"indian":3.8,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":64.09,"eff_c22":27.29,"eff_i22":2.24,"residual22":3.09,"bn_fitted22":42.39,"ph_opp_frac":0.4725,"pn_opp_frac":0.5045,"ot_opp_frac":0.0231},{"name":"TANGKAK","bn22":38.98,"ph22":40.85,"pn22":15.58,"oth22":4.59,"turnout22":57.0,"malay":40.6,"chinese":48.0,"indian":9.9,"ur":"SEMI URBAN","ur_group":"urban","race":"Mixed (no race >50%)","winner22":"PH-DAP","eff_m22":47.22,"eff_c22":38.66,"eff_i22":6.39,"residual22":5.38,"bn_fitted22":33.6,"ph_opp_frac":0.6694,"pn_opp_frac":0.2554,"ot_opp_frac":0.0752},{"name":"SEROM","bn22":38.4,"ph22":24.86,"pn22":35.24,"oth22":1.5,"turnout22":58.0,"malay":67.1,"chinese":31.6,"indian":0.9,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":76.52,"eff_c22":24.95,"eff_i22":0.59,"residual22":-11.24,"bn_fitted22":49.63,"ph_opp_frac":0.4036,"pn_opp_frac":0.5721,"ot_opp_frac":0.0243},{"name":"BENTAYAN","bn22":20.57,"ph22":64.53,"pn22":14.9,"oth22":0.0,"turnout22":49.9,"malay":26.5,"chinese":70.7,"indian":2.3,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":35.14,"eff_c22":64.91,"eff_i22":1.69,"residual22":-9.06,"bn_fitted22":29.62,"ph_opp_frac":0.8124,"pn_opp_frac":0.1876,"ot_opp_frac":0.0},{"name":"SIMPANG JERAM","bn22":28.37,"ph22":40.94,"pn22":29.72,"oth22":0.97,"turnout22":54.7,"malay":52.7,"chinese":44.2,"indian":2.5,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"PH-PAN","eff_m22":63.69,"eff_c22":37.04,"eff_i22":1.67,"residual22":-15.02,"bn_fitted22":43.39,"ph_opp_frac":0.5716,"pn_opp_frac":0.4148,"ot_opp_frac":0.0136},{"name":"BUKIT NANING","bn22":38.14,"ph22":23.27,"pn22":27.37,"oth22":11.22,"turnout22":64.4,"malay":63.3,"chinese":35.1,"indian":1.0,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":65.07,"eff_c22":24.99,"eff_i22":0.55,"residual22":-4.55,"bn_fitted22":42.69,"ph_opp_frac":0.3761,"pn_opp_frac":0.4425,"ot_opp_frac":0.1814},{"name":"MAHARANI","bn22":27.89,"ph22":31.03,"pn22":35.97,"oth22":5.11,"turnout22":55.8,"malay":61.6,"chinese":35.5,"indian":2.2,"ur":"URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"PN-PAS","eff_m22":73.13,"eff_c22":29.21,"eff_i22":1.42,"residual22":-20.23,"bn_fitted22":48.12,"ph_opp_frac":0.4304,"pn_opp_frac":0.4988,"ot_opp_frac":0.0709},{"name":"SUNGAI BALANG","bn22":45.57,"ph22":19.65,"pn22":32.97,"oth22":1.81,"turnout22":61.8,"malay":73.6,"chinese":25.8,"indian":0.1,"ur":"RURAL","ur_group":"rural","race":"Malay (70-79%)","winner22":"BN-UMNO","eff_m22":78.81,"eff_c22":19.12,"eff_i22":0.08,"residual22":-4.71,"bn_fitted22":50.28,"ph_opp_frac":0.361,"pn_opp_frac":0.6058,"ot_opp_frac":0.0332},{"name":"SEMERAH","bn22":44.93,"ph22":22.44,"pn22":30.45,"oth22":2.18,"turnout22":61.4,"malay":74.3,"chinese":24.9,"indian":0.5,"ur":"RURAL","ur_group":"rural","race":"Malay (70-79%)","winner22":"BN-UMNO","eff_m22":80.13,"eff_c22":18.57,"eff_i22":0.29,"residual22":-6.08,"bn_fitted22":51.01,"ph_opp_frac":0.4075,"pn_opp_frac":0.5529,"ot_opp_frac":0.0395},{"name":"SRI MEDAN","bn22":60.52,"ph22":7.07,"pn22":31.68,"oth22":0.73,"turnout22":68.0,"malay":90.6,"chinese":8.6,"indian":0.3,"ur":"RURAL","ur_group":"rural","race":"Malay (90+%)","winner22":"BN-UMNO","eff_m22":88.15,"eff_c22":5.78,"eff_i22":0.16,"residual22":6.28,"bn_fitted22":54.24,"ph_opp_frac":0.179,"pn_opp_frac":0.8025,"ot_opp_frac":0.0185},{"name":"YONG PENG","bn22":52.84,"ph22":38.16,"pn22":9.0,"oth22":0.0,"turnout22":57.5,"malay":35.1,"chinese":57.6,"indian":6.8,"ur":"SEMI URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"BN-MCA","eff_m22":40.36,"eff_c22":45.94,"eff_i22":4.32,"residual22":22.47,"bn_fitted22":30.36,"ph_opp_frac":0.8092,"pn_opp_frac":0.1908,"ot_opp_frac":0.0},{"name":"SEMARANG","bn22":61.93,"ph22":7.41,"pn22":29.38,"oth22":1.28,"turnout22":66.8,"malay":86.2,"chinese":12.6,"indian":0.7,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-UMNO","eff_m22":85.5,"eff_c22":8.67,"eff_i22":0.37,"residual22":8.93,"bn_fitted22":53.0,"ph_opp_frac":0.1947,"pn_opp_frac":0.7717,"ot_opp_frac":0.0336},{"name":"PARIT YAANI","bn22":38.56,"ph22":37.31,"pn22":23.11,"oth22":1.02,"turnout22":57.6,"malay":55.8,"chinese":42.8,"indian":0.8,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":64.11,"eff_c22":34.1,"eff_i22":0.54,"residual22":-4.71,"bn_fitted22":43.27,"ph_opp_frac":0.6073,"pn_opp_frac":0.3761,"ot_opp_frac":0.0165},{"name":"PARIT RAJA","bn22":49.57,"ph22":0.0,"pn22":29.9,"oth22":20.52,"turnout22":60.9,"malay":74.3,"chinese":23.5,"indian":1.7,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (70-79%)","winner22":"BN-UMNO","eff_m22":80.78,"eff_c22":17.67,"eff_i22":1.03,"residual22":-1.72,"bn_fitted22":51.29,"ph_opp_frac":0.0,"pn_opp_frac":0.593,"ot_opp_frac":0.407},{"name":"PENGGARAM","bn22":24.32,"ph22":53.67,"pn22":15.55,"oth22":6.46,"turnout22":50.7,"malay":36.7,"chinese":60.6,"indian":2.1,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":47.86,"eff_c22":54.79,"eff_i22":1.53,"residual22":-11.73,"bn_fitted22":36.05,"ph_opp_frac":0.7092,"pn_opp_frac":0.2055,"ot_opp_frac":0.0853},{"name":"SENGGARANG","bn22":45.11,"ph22":26.97,"pn22":26.09,"oth22":1.83,"turnout22":59.2,"malay":63.2,"chinese":35.6,"indian":0.6,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":70.56,"eff_c22":27.54,"eff_i22":0.36,"residual22":-1.23,"bn_fitted22":46.35,"ph_opp_frac":0.4913,"pn_opp_frac":0.4753,"ot_opp_frac":0.0334},{"name":"RENGIT","bn22":48.91,"ph22":12.78,"pn22":37.03,"oth22":1.27,"turnout22":61.2,"malay":82.0,"chinese":17.0,"indian":0.2,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-UMNO","eff_m22":88.63,"eff_c22":12.76,"eff_i22":0.13,"residual22":-6.51,"bn_fitted22":55.42,"ph_opp_frac":0.2502,"pn_opp_frac":0.7249,"ot_opp_frac":0.025},{"name":"MACHAP","bn22":56.64,"ph22":0.0,"pn22":23.04,"oth22":20.33,"turnout22":59.3,"malay":66.4,"chinese":28.1,"indian":4.9,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":74.15,"eff_c22":21.7,"eff_i22":3.0,"residual22":8.86,"bn_fitted22":47.78,"ph_opp_frac":0.0,"pn_opp_frac":0.5313,"ot_opp_frac":0.4687},{"name":"LAYANG-LAYANG","bn22":55.0,"ph22":34.5,"pn22":9.31,"oth22":1.19,"turnout22":56.4,"malay":56.7,"chinese":29.8,"indian":12.5,"ur":"RURAL","ur_group":"rural","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":66.52,"eff_c22":24.23,"eff_i22":8.12,"residual22":11.53,"bn_fitted22":43.47,"ph_opp_frac":0.7666,"pn_opp_frac":0.2069,"ot_opp_frac":0.0265},{"name":"MENGKIBOL","bn22":28.86,"ph22":58.91,"pn22":12.24,"oth22":0.0,"turnout22":51.9,"malay":28.9,"chinese":57.8,"indian":12.7,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":36.8,"eff_c22":51.03,"eff_i22":8.94,"residual22":0.0,"bn_fitted22":28.86,"ph_opp_frac":0.828,"pn_opp_frac":0.172,"ot_opp_frac":0.0},{"name":"MAHKOTA","bn22":45.86,"ph22":31.59,"pn22":21.02,"oth22":1.53,"turnout22":57.3,"malay":55.9,"chinese":34.4,"indian":7.3,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":64.52,"eff_c22":27.53,"eff_i22":4.69,"residual22":3.18,"bn_fitted22":42.68,"ph_opp_frac":0.5835,"pn_opp_frac":0.3882,"ot_opp_frac":0.0283},{"name":"PALOH","bn22":55.05,"ph22":33.41,"pn22":10.31,"oth22":1.23,"turnout22":58.8,"malay":47.6,"chinese":35.8,"indian":15.2,"ur":"RURAL","ur_group":"rural","race":"Mixed (no race >50%)","winner22":"BN-MCA","eff_m22":53.61,"eff_c22":27.95,"eff_i22":9.44,"residual22":18.94,"bn_fitted22":36.11,"ph_opp_frac":0.7433,"pn_opp_frac":0.2293,"ot_opp_frac":0.0274},{"name":"KAHANG","bn22":62.69,"ph22":13.04,"pn22":22.64,"oth22":1.63,"turnout22":58.9,"malay":74.3,"chinese":21.1,"indian":2.7,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (70-79%)","winner22":"BN-MIC","eff_m22":83.49,"eff_c22":16.39,"eff_i22":1.67,"residual22":9.92,"bn_fitted22":52.77,"ph_opp_frac":0.3494,"pn_opp_frac":0.6069,"ot_opp_frac":0.0437},{"name":"ENDAU","bn22":35.47,"ph22":7.59,"pn22":55.48,"oth22":1.46,"turnout22":55.4,"malay":81.3,"chinese":14.0,"indian":0.9,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (80-89%)","winner22":"PN-PPBM","eff_m22":97.12,"eff_c22":11.57,"eff_i22":0.63,"residual22":-24.95,"bn_fitted22":60.42,"ph_opp_frac":0.1176,"pn_opp_frac":0.8597,"ot_opp_frac":0.0226},{"name":"TENGGAROH","bn22":49.1,"ph22":7.13,"pn22":42.78,"oth22":0.99,"turnout22":57.2,"malay":83.2,"chinese":13.7,"indian":1.4,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-MIC","eff_m22":96.19,"eff_c22":10.95,"eff_i22":0.9,"residual22":-10.68,"bn_fitted22":59.78,"ph_opp_frac":0.1401,"pn_opp_frac":0.8404,"ot_opp_frac":0.0195},{"name":"PANTI","bn22":57.29,"ph22":10.52,"pn22":30.67,"oth22":1.52,"turnout22":58.4,"malay":78.5,"chinese":14.5,"indian":5.5,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (70-79%)","winner22":"BN-UMNO","eff_m22":88.91,"eff_c22":11.4,"eff_i22":3.46,"residual22":1.87,"bn_fitted22":55.42,"ph_opp_frac":0.2464,"pn_opp_frac":0.7181,"ot_opp_frac":0.0356},{"name":"PASIR RAJA","bn22":58.21,"ph22":12.26,"pn22":27.88,"oth22":1.64,"turnout22":58.8,"malay":69.7,"chinese":19.0,"indian":8.2,"ur":"RURAL","ur_group":"rural","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":78.46,"eff_c22":14.8,"eff_i22":5.07,"residual22":8.7,"bn_fitted22":49.51,"ph_opp_frac":0.2934,"pn_opp_frac":0.6672,"ot_opp_frac":0.0394},{"name":"SEDILI","bn22":63.52,"ph22":1.75,"pn22":33.62,"oth22":1.11,"turnout22":67.6,"malay":97.2,"chinese":1.6,"indian":0.7,"ur":"RURAL","ur_group":"rural","race":"Malay (90+%)","winner22":"BN-UMNO","eff_m22":95.1,"eff_c22":1.08,"eff_i22":0.37,"residual22":5.66,"bn_fitted22":57.86,"ph_opp_frac":0.0481,"pn_opp_frac":0.9215,"ot_opp_frac":0.0305},{"name":"JOHOR LAMA","bn22":60.56,"ph22":7.6,"pn22":30.51,"oth22":1.33,"turnout22":62.6,"malay":83.3,"chinese":13.6,"indian":2.5,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-UMNO","eff_m22":88.08,"eff_c22":9.92,"eff_i22":1.44,"residual22":5.83,"bn_fitted22":54.73,"ph_opp_frac":0.1926,"pn_opp_frac":0.7736,"ot_opp_frac":0.0338},{"name":"PENAWAR","bn22":66.98,"ph22":3.74,"pn22":26.47,"oth22":2.81,"turnout22":63.1,"malay":98.5,"chinese":0.3,"indian":0.6,"ur":"RURAL","ur_group":"rural","race":"Malay (90+%)","winner22":"BN-UMNO","eff_m22":103.21,"eff_c22":0.25,"eff_i22":0.34,"residual22":4.3,"bn_fitted22":62.68,"ph_opp_frac":0.1133,"pn_opp_frac":0.8016,"ot_opp_frac":0.0852},{"name":"TANJUNG SURAT","bn22":66.97,"ph22":5.44,"pn22":26.84,"oth22":0.75,"turnout22":59.9,"malay":80.9,"chinese":17.5,"indian":0.6,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-UMNO","eff_m22":89.44,"eff_c22":13.38,"eff_i22":0.39,"residual22":10.98,"bn_fitted22":55.99,"ph_opp_frac":0.1647,"pn_opp_frac":0.8126,"ot_opp_frac":0.0226},{"name":"TIRAM","bn22":40.66,"ph22":22.25,"pn22":31.3,"oth22":5.8,"turnout22":54.8,"malay":59.4,"chinese":25.5,"indian":11.6,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":71.71,"eff_c22":21.32,"eff_i22":7.74,"residual22":-5.59,"bn_fitted22":46.25,"ph_opp_frac":0.3749,"pn_opp_frac":0.5275,"ot_opp_frac":0.0977},{"name":"PUTERI WANGSA","bn22":29.78,"ph22":0.0,"pn22":16.92,"oth22":53.3,"turnout22":47.9,"malay":37.3,"chinese":51.2,"indian":10.0,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"MUDA","eff_m22":51.53,"eff_c22":49.0,"eff_i22":7.61,"residual22":-7.75,"bn_fitted22":37.54,"ph_opp_frac":0.0,"pn_opp_frac":0.2409,"ot_opp_frac":0.7591},{"name":"JOHOR JAYA","bn22":37.68,"ph22":41.74,"pn22":17.53,"oth22":3.06,"turnout22":53.2,"malay":42.5,"chinese":46.1,"indian":7.5,"ur":"URBAN","ur_group":"urban","race":"Mixed (no race >50%)","winner22":"PH-DAP","eff_m22":52.85,"eff_c22":39.75,"eff_i22":5.19,"residual22":0.52,"bn_fitted22":37.16,"ph_opp_frac":0.6697,"pn_opp_frac":0.2812,"ot_opp_frac":0.049},{"name":"PERMAS","bn22":41.93,"ph22":25.92,"pn22":27.78,"oth22":4.37,"turnout22":55.7,"malay":55.5,"chinese":27.3,"indian":11.8,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":66.04,"eff_c22":22.51,"eff_i22":7.74,"residual22":-1.03,"bn_fitted22":42.96,"ph_opp_frac":0.4463,"pn_opp_frac":0.4784,"ot_opp_frac":0.0752},{"name":"LARKIN","bn22":41.77,"ph22":16.78,"pn22":25.69,"oth22":15.76,"turnout22":51.8,"malay":64.5,"chinese":27.9,"indian":6.2,"ur":"URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":82.53,"eff_c22":24.75,"eff_i22":4.36,"residual22":-11.48,"bn_fitted22":53.25,"ph_opp_frac":0.2881,"pn_opp_frac":0.4412,"ot_opp_frac":0.2706},{"name":"STULANG","bn22":34.56,"ph22":44.84,"pn22":13.59,"oth22":7.01,"turnout22":47.0,"malay":40.1,"chinese":53.5,"indian":4.7,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":56.42,"eff_c22":52.14,"eff_i22":3.64,"residual22":-6.34,"bn_fitted22":40.9,"ph_opp_frac":0.6852,"pn_opp_frac":0.2077,"ot_opp_frac":0.1071},{"name":"PERLING","bn22":35.76,"ph22":43.59,"pn22":20.66,"oth22":0.0,"turnout22":43.3,"malay":39.5,"chinese":45.9,"indian":12.6,"ur":"URBAN","ur_group":"urban","race":"Mixed (no race >50%)","winner22":"PH-DAP","eff_m22":60.48,"eff_c22":48.64,"eff_i22":10.64,"residual22":-7.17,"bn_fitted22":42.92,"ph_opp_frac":0.6784,"pn_opp_frac":0.3216,"ot_opp_frac":0.0},{"name":"KEMPAS","bn22":38.92,"ph22":27.44,"pn22":26.24,"oth22":7.4,"turnout22":50.4,"malay":57.1,"chinese":30.8,"indian":10.4,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":75.02,"eff_c22":28.05,"eff_i22":7.52,"residual22":-10.2,"bn_fitted22":49.12,"ph_opp_frac":0.4493,"pn_opp_frac":0.4295,"ot_opp_frac":0.1212},{"name":"SKUDAI","bn22":27.57,"ph22":58.53,"pn22":13.9,"oth22":0.0,"turnout22":44.9,"malay":23.0,"chinese":61.7,"indian":13.6,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":33.95,"eff_c22":63.04,"eff_i22":11.05,"residual22":-1.09,"bn_fitted22":28.66,"ph_opp_frac":0.8081,"pn_opp_frac":0.1919,"ot_opp_frac":0.0},{"name":"KOTA ISKANDAR","bn22":40.79,"ph22":33.1,"pn22":22.05,"oth22":4.06,"turnout22":50.3,"malay":50.1,"chinese":34.4,"indian":13.9,"ur":"URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":66.04,"eff_c22":31.4,"eff_i22":10.12,"residual22":-3.3,"bn_fitted22":44.09,"ph_opp_frac":0.559,"pn_opp_frac":0.3723,"ot_opp_frac":0.0686},{"name":"BUKIT PERMAI","bn22":48.36,"ph22":0.0,"pn22":22.69,"oth22":28.95,"turnout22":58.3,"malay":54.0,"chinese":31.9,"indian":13.0,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-UMNO","eff_m22":61.36,"eff_c22":25.1,"eff_i22":8.15,"residual22":7.91,"bn_fitted22":40.45,"ph_opp_frac":0.0,"pn_opp_frac":0.4393,"ot_opp_frac":0.5607},{"name":"BUKIT BATU","bn22":38.63,"ph22":39.2,"pn22":16.57,"oth22":5.6,"turnout22":53.7,"malay":37.2,"chinese":53.7,"indian":8.1,"ur":"SEMI URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-PKR","eff_m22":45.89,"eff_c22":45.89,"eff_i22":5.55,"residual22":4.92,"bn_fitted22":33.72,"ph_opp_frac":0.6388,"pn_opp_frac":0.2699,"ot_opp_frac":0.0913},{"name":"SENAI","bn22":33.21,"ph22":51.75,"pn22":15.04,"oth22":0.0,"turnout22":51.1,"malay":29.1,"chinese":56.9,"indian":12.4,"ur":"URBAN","ur_group":"urban","race":"Chinese-majority (>50%)","winner22":"PH-DAP","eff_m22":37.68,"eff_c22":51.05,"eff_i22":8.86,"residual22":3.82,"bn_fitted22":29.39,"ph_opp_frac":0.7748,"pn_opp_frac":0.2252,"ot_opp_frac":0.0},{"name":"BENUT","bn22":63.08,"ph22":6.95,"pn22":29.16,"oth22":0.8,"turnout22":62.8,"malay":82.2,"chinese":17.0,"indian":0.1,"ur":"RURAL","ur_group":"rural","race":"Malay (80-89%)","winner22":"BN-UMNO","eff_m22":86.69,"eff_c22":12.39,"eff_i22":0.09,"residual22":8.89,"bn_fitted22":54.2,"ph_opp_frac":0.1882,"pn_opp_frac":0.79,"ot_opp_frac":0.0218},{"name":"PULAI SEBATANG","bn22":50.06,"ph22":24.67,"pn22":23.95,"oth22":1.32,"turnout22":54.5,"malay":62.9,"chinese":34.8,"indian":1.4,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":76.37,"eff_c22":29.27,"eff_i22":0.95,"residual22":-0.03,"bn_fitted22":50.09,"ph_opp_frac":0.4941,"pn_opp_frac":0.4795,"ot_opp_frac":0.0264},{"name":"PEKAN NANAS","bn22":51.53,"ph22":28.93,"pn22":12.81,"oth22":6.72,"turnout22":60.9,"malay":55.8,"chinese":42.4,"indian":1.1,"ur":"SEMI URBAN","ur_group":"urban","race":"Malay (50-59%)","winner22":"BN-MCA","eff_m22":60.64,"eff_c22":31.94,"eff_i22":0.63,"residual22":10.65,"bn_fitted22":40.89,"ph_opp_frac":0.5969,"pn_opp_frac":0.2644,"ot_opp_frac":0.1387},{"name":"KUKUP","bn22":60.37,"ph22":16.99,"pn22":17.84,"oth22":4.81,"turnout22":57.2,"malay":60.5,"chinese":37.8,"indian":0.9,"ur":"RURAL","ur_group":"rural","race":"Malay (60-69%)","winner22":"BN-UMNO","eff_m22":70.01,"eff_c22":30.24,"eff_i22":0.58,"residual22":14.01,"bn_fitted22":46.35,"ph_opp_frac":0.4287,"pn_opp_frac":0.45,"ot_opp_frac":0.1213}],"model":{"BM":60.6944,"BC":12.7773,"TM22":66.1822,"TC22":45.8453,"TI22":36.5857,"RMSE":9.78,"AVG_MALAY_PCT":59.3562,"ph_align_rural_default":0.263,"ph_align_urban_default":0.4894}};
+
+const SEATS   = ENGINE_DATA.seats;
+const MODEL   = ENGINE_DATA.model;
+const TOTAL   = 56, MAJ = 29;
+const RMSE    = MODEL.RMSE;
+
+const BUCKET_CLR = {
+  "BN Safe":"#0C447C","BN Likely":"#378ADD","Marginal":"#BA7517",
+  "BN Unlikely":"#D85A30","BN Safe Loss":"#A32D2D"
+};
+const ROW_CLS = {
+  "BN Safe":"bn-safe","BN Likely":"bn-likely","Marginal":"marginal",
+  "BN Unlikely":"bn-unlikely","BN Safe Loss":"safe-loss"
+};
+const RACE_CLR = {
+  'Chinese-majority (>50%)':'#c0392b','Mixed (no race >50%)':'#d4a017',
+  'Malay (50-59%)':'#b8e6b8','Malay (60-69%)':'#7dcc7d',
+  'Malay (70-79%)':'#4ab54a','Malay (80-89%)':'#2e8b2e','Malay (90+%)':'#1a5c1a'
+};
+const AX = '#888';
+
+document.getElementById('rmse-badge').textContent = RMSE.toFixed(1) + ' pp';
+
+let overrides = {}, tableFilter = 'all', sortState = {col:'margin_pp',asc:false};
+let allPreds = [];
+let chart = null;
+
+/* ── Core engine (JS mirror of Python) ── */
+function runEngine() {
+  const sc  = document.querySelector('input[name="sc"]:checked').value;
+  const te  = parseInt(document.getElementById('te').value)  / 100;
+  const dtb = parseInt(document.getElementById('dtb').value) / 100;
+  const almR= parseInt(document.getElementById('alm-r').value) / 100;
+  const almU= parseInt(document.getElementById('alm-u').value) / 100;
+  const T   = parseInt(document.getElementById('turnout').value);
+  const gap = parseInt(document.getElementById('gap').value);
+  const dm  = parseFloat(document.getElementById('dm').value);
+  const dc  = parseFloat(document.getElementById('dc').value);
+  const di  = 0;  // Indian absorbed into residual — not a model input
+
+  const BM_next = MODEL.BM + dm;
+  const BC_next = Math.max(0, MODEL.BC + dc);
+
+  return SEATS.map(s => {
+    /* seat override */
+    if (overrides[s.name] !== undefined) {
+      const bn_ov = overrides[s.name];
+      const opp   = 100 - bn_ov;
+      let ph = opp * s.ph_opp_frac, pn = opp * s.pn_opp_frac, ot = opp * s.ot_opp_frac;
+      return finalise(s, bn_ov, ph, pn, ot, sc, te, dtb, 0, true);
+    }
+
+    /* effective composition — statewide TM/TC derived from T_target and gap,
+       anchored on avg Malay% so statewide avg turnout ≈ T_target.
+       Per-seat turnout then varies naturally by composition. */
+    const avg_m = MODEL.AVG_MALAY_PCT / 100;
+    const TC    = Math.max(5, Math.min(98, T - avg_m * gap));
+    const TM    = Math.min(100, TC + gap);
+    const T_s   = Math.max(0.05, (s.malay/100 * TM + (100-s.malay)/100 * TC) / 100);
+    const eff_m = (s.malay/100  * TM/100) / T_s;
+    const eff_c = (s.chinese/100 * TC/100) / T_s;
+    /* Indian voters absorbed into seat residual — not modelled explicitly. */
+    const bn_model = BM_next * eff_m + BC_next * eff_c;
+    const bn_pred  = Math.max(0, Math.min(100, bn_model + s.residual22));
+
+    /* opposition distribution */
+    const opp_total  = 100 - bn_pred;
+    const ph_align   = s.ur_group === 'rural' ? almR : almU;
+    const malay_opp  = eff_m * Math.max(0, 1 - BM_next/100);
+    const chin_opp   = eff_c * Math.max(0, 1 - BC_next/100);
+    const total_opp  = malay_opp + chin_opp;
+
+    let ph, pn, ot;
+    if (total_opp > 0) {
+      const ph_align_def = s.ur_group==='rural' ? MODEL.ph_align_rural_default : MODEL.ph_align_urban_default;
+      const delta_ph     = (ph_align - ph_align_def) * (malay_opp / total_opp);
+      const ph_frac      = Math.max(0, Math.min(1, s.ph_opp_frac + delta_ph));
+      const pn_frac      = Math.max(0, Math.min(1, s.pn_opp_frac - delta_ph));
+      ph = opp_total * ph_frac;
+      pn = opp_total * pn_frac;
+      ot = opp_total * Math.max(0, 1 - ph_frac - pn_frac);
+    } else {
+      ph = opp_total * s.ph_opp_frac;
+      pn = opp_total * s.pn_opp_frac;
+      ot = opp_total * s.ot_opp_frac;
+    }
+    return finalise(s, bn_pred, ph, pn, ot, sc, te, dtb, eff_m, false);
+  });
+}
+
+function finalise(s, bn, ph, pn, ot, sc, te, dtb, eff_m, override) {
+  let leading_opp, margin, winner;
+  if (sc === '3way') {
+    leading_opp = Math.max(ph, pn, ot);
+  } else if (sc === 'opp') {
+    const joint = ph + pn * te;
+    bn = Math.min(100, bn + pn*(1-te)*dtb);
+    leading_opp = Math.max(joint, ot);
+  } else {
+    bn = Math.min(100, bn + pn*te);
+    ph = ph + pn*(1-te)*dtb;
+    leading_opp = Math.max(ph, ot);
+  }
+  margin = bn - leading_opp;
+  winner = margin > 0 ? 'BN' : 'Opposition';
+  const is_marg = Math.abs(margin) < RMSE;
+  const bucket  = bucketFromScore(winner === 'BN' ? 0.9 + margin/200 : 0.1 - margin/200, margin);
+  return {seat:s.name, race:s.race, ur:s.ur, ur_group:s.ur_group,
+          bn22:s.bn22, bn_pred:Math.round(bn*10)/10,
+          opp_pred:Math.round(leading_opp*10)/10,
+          margin_pp:Math.round(margin*10)/10,
+          winner, is_marg, bucket,
+          residual22:s.residual22, override};
+}
+
+function bucketFromScore(_, margin) {
+  const m = margin;
+  if (m >  2*RMSE) return 'BN Safe';
+  if (m >  0)      return m < RMSE ? 'Marginal' : 'BN Likely';
+  if (m > -RMSE)   return 'Marginal';
+  if (m > -2*RMSE) return 'BN Unlikely';
+  return 'BN Safe Loss';
+}
+
+/* ── Update all UI ── */
+function update() {
+  allPreds = runEngine();
+  const bn  = allPreds.filter(p=>p.winner==='BN').length;
+  const opp = TOTAL - bn;
+  document.getElementById('c-bn').textContent  = bn;
+  document.getElementById('c-opp').textContent = opp;
+  document.getElementById('c-bn-sub').textContent  = 'of '+TOTAL+' seats';
+  document.getElementById('c-opp-sub').textContent = 'of '+TOTAL+' seats';
+  const majCard = document.getElementById('c-maj-card');
+  const majVal  = document.getElementById('c-maj');
+  const majSub  = document.getElementById('c-maj-sub');
+  majCard.className = 'card '+(bn>=MAJ?'good':'bad');
+  majVal.textContent  = bn>=MAJ?'YES':'NO';
+  majSub.textContent  = bn>=MAJ?`Majority by ${bn-MAJ+1} seat(s)`:`Short by ${MAJ-bn} seat(s)`;
+
+  document.getElementById('maj-bar').style.width = (bn/TOTAL*100).toFixed(1)+'%';
+  document.getElementById('maj-line').style.left = ((MAJ-0.5)/TOTAL*100).toFixed(2)+'%';
+
+  updateStrip(); updateChart(); updateTable();
+}
+
+/* ── Strip ── */
+const tip = document.getElementById('tipbox');
+function showTip(e,p) {
+  const margTxt = p.is_marg?'<br><span style="color:#BA7517;font-weight:500">Marginal (±'+RMSE.toFixed(0)+' pp RMSE)</span>':'';
+  tip.innerHTML = `<strong>${p.seat}</strong><br>${p.race}<br>${p.ur}<br>
+    Margin: <strong>${p.margin_pp>=0?'+':''}${p.margin_pp.toFixed(1)} pp</strong>  ·  ${p.winner==='BN'?'<span style="color:#185FA5">BN</span>':'<span style="color:#A32D2D">Opp</span>'}${margTxt}`;
+  tip.style.display='block'; positionTip(e);
+}
+function hideTip(){tip.style.display='none';}
+function positionTip(e){
+  const x=e.clientX+14,y=e.clientY-10;
+  tip.style.left=(x+250>window.innerWidth?x-265:x)+'px';
+  tip.style.top=(y+80>window.innerHeight?y-80:y)+'px';
+}
+document.addEventListener('mousemove',e=>{if(tip.style.display==='block')positionTip(e);});
+
+function updateStrip() {
+  const sorted=[...allPreds].sort((a,b)=>b.margin_pp-a.margin_pp);
+  const strip=document.getElementById('strip');
+  strip.innerHTML='';
+  sorted.forEach((p,idx)=>{
+    if(idx===MAJ-1){const mk=document.createElement('div');mk.className='maj-marker';strip.appendChild(mk);}
+    const tile=document.createElement('div');
+    tile.className='strip-tile';
+    tile.style.background = BUCKET_CLR[p.bucket]||'#aaa';
+    tile.style.opacity = p.winner==='BN'?'1':'0.7';
+    tile.style.outline = p.is_marg?'2px solid #BA7517':'none';
+    tile.addEventListener('mouseenter',e=>showTip(e,p));
+    tile.addEventListener('mouseleave',hideTip);
+    strip.appendChild(tile);
+  });
+}
+
+/* ── Margin chart ── */
+function updateChart() {
+  const sorted=[...allPreds].sort((a,b)=>b.margin_pp-a.margin_pp);
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('marginChart')||{},{
+    type:'bar',
+    data:{labels:sorted.map(p=>p.seat),
+      datasets:[{data:sorted.map(p=>p.margin_pp),
+        backgroundColor:sorted.map(p=>p.is_marg?'#BA7517':p.winner==='BN'?'#185FA5':'#c0392b'),
+        borderWidth:0,barThickness:14}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      animation:{duration:250},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:i=>[i[0].label],
+          label:i=>{const p=sorted[i.dataIndex];
+            return[`Margin: ${i.raw>=0?'+':''}${i.raw.toFixed(1)} pp`,
+                   `BN pred: ${p.bn_pred.toFixed(1)}%   Opp: ${p.opp_pred.toFixed(1)}%`,
+                   `2022 residual: ${p.residual22>=0?'+':''}${p.residual22.toFixed(1)} pp`,
+                   p.is_marg?'⚠ Marginal (within ±'+RMSE.toFixed(0)+' pp RMSE)':p.bucket];
+          }}}},
+      scales:{
+        x:{title:{display:true,text:'Predicted BN margin (pp)',color:AX,font:{size:11}},
+           ticks:{color:AX,callback:v=>(v>=0?'+':'')+v+'pp'},
+           grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,.4)':'rgba(0,0,0,.06)',
+                 lineWidth:ctx=>ctx.tick.value===0?1.5:1}},
+        y:{ticks:{color:'#555',font:{size:10},autoSkip:false,maxRotation:0},grid:{display:false}}
+      }}
+  });
+}
+
+/* ── Table ── */
+function updateTable() {
+  let data=[...allPreds];
+  if(tableFilter==='bn')   data=data.filter(p=>p.winner==='BN');
+  if(tableFilter==='opp')  data=data.filter(p=>p.winner==='Opposition');
+  if(tableFilter==='marg') data=data.filter(p=>p.is_marg);
+  const col=sortState.col;
+  data.sort((a,b)=>{
+    const va=a[col],vb=b[col];
+    return typeof va==='string'?sortState.asc?va.localeCompare(vb):vb.localeCompare(va):sortState.asc?va-vb:vb-va;
+  });
+  const fmtM=v=>v>=0?`<span class="dp">+${v.toFixed(1)} pp</span>`:`<span class="dn">${v.toFixed(1)} pp</span>`;
+  const fmtR=v=>v>=0?`<span class="dp">+${v.toFixed(1)}</span>`:`<span class="dn">${v.toFixed(1)}</span>`;
+  document.getElementById('tbl-body').innerHTML=data.map(p=>`<tr class="${ROW_CLS[p.bucket]}">
+    <td>${p.seat}${p.is_marg?'<span class="marg-tag">marginal</span>':''}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${p.race}</td>
+    <td>${p.ur}</td>
+    <td>${p.bn22.toFixed(1)}%</td>
+    <td><strong>${p.bn_pred.toFixed(1)}%</strong></td>
+    <td>${fmtM(p.margin_pp)}</td>
+    <td>${fmtR(p.residual22)}</td>
+    <td class="${p.winner==='BN'?'w-bn':'w-opp'}">${p.winner}</td>
+  </tr>`).join('');
+}
+
+/* ── Scenario toggles ── */
+document.querySelectorAll('input[name="sc"]').forEach(r=>{
+  r.addEventListener('change',()=>{
+    document.querySelectorAll('.sc-opt').forEach(l=>l.classList.remove('active'));
+    r.closest('.sc-opt').classList.add('active');
+    const is3 = r.value==='3way';
+    document.getElementById('te').disabled  = is3;
+    document.getElementById('dtb').disabled = is3;
+    document.getElementById('te-note').style.display = is3?'':'none';
+    document.getElementById('dtb-lbl').textContent   = r.value==='bnpn'?'Defection to PH':'Defection to BN';
+    document.getElementById('dtb-hint').innerHTML    = r.value==='bnpn'
+      ? 'Of non-transferring PN voters, fraction voting PH rather than abstaining.'
+      : 'Of PN voters not following the pact, fraction voting BN rather than abstaining.';
+    update();
+  });
+});
+
+/* ── All sliders ── */
+[['te','%',1],['dtb','%',1],['alm-r','%',1],['alm-u','%',1],
+ ['turnout','%',1],['gap',' pp',1],['dm',' pp',.1],['dc',' pp',.1]
+].forEach(([id,sfx,step])=>{
+  const el=document.getElementById(id);
+  const out=document.getElementById(id+'-out');
+  el.addEventListener('input',()=>{
+    const v=parseFloat(el.value);
+    out.textContent=(step<1?(v>=0?'+':'')+v.toFixed(1):v)+sfx;
+    update();
+  });
+});
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab==='resid') renderResidChart();
+    if(t.dataset.tab==='oppsplit') renderOppSplitCharts();
+  });
+});
+
+/* ── Table filters + sort ── */
+document.querySelectorAll('.tbl-f').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.tbl-f').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); tableFilter=b.dataset.f; updateTable();
+  });
+});
+document.querySelectorAll('th[data-col]').forEach(th=>{
+  th.addEventListener('click',()=>{
+    const c=th.dataset.col;
+    if(sortState.col===c)sortState.asc=!sortState.asc;
+    else{sortState.col=c;sortState.asc=['name','race','ur'].includes(c);}
+    document.querySelectorAll('th .si').forEach(i=>i.textContent='↕');
+    th.querySelector('.si').textContent=sortState.asc?'↑':'↓';
+    updateTable();
+  });
+});
+
+/* ── Overrides ── */
+const ovSelect=document.getElementById('ov-seat');
+SEATS.forEach(s=>{const o=document.createElement('option');o.value=s.name;o.textContent=s.name;ovSelect.appendChild(o);});
+document.getElementById('btn-add-ov').addEventListener('click',()=>{
+  const seat=ovSelect.value, val=parseFloat(document.getElementById('ov-val').value);
+  if(!seat||isNaN(val)||val<0||val>100)return;
+  overrides[seat]=val; renderOverrides(); ovSelect.value=''; document.getElementById('ov-val').value=''; update();
+});
+function renderOverrides(){
+  const list=document.getElementById('ov-list');
+  list.innerHTML=Object.entries(overrides).map(([s,v])=>`
+    <li class="ov-item"><span title="${s}">${s}</span><span class="ov-val">BN ${v.toFixed(1)}%</span>
+    <button class="btn-del" data-seat="${s}">×</button></li>`).join('');
+  list.querySelectorAll('.btn-del').forEach(b=>b.addEventListener('click',()=>{delete overrides[b.dataset.seat];renderOverrides();update();}));
+}
+
+/* ── Reset ── */
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  document.querySelector('input[value="3way"]').checked=true;
+  document.querySelector('input[value="3way"]').dispatchEvent(new Event('change'));
+  [['te','82'],['dtb','25'],['alm-r','26'],['alm-u','49'],['turnout','56'],['gap','20'],
+   ['dm','0'],['dc','0']].forEach(([id,v])=>{document.getElementById(id).value=v;document.getElementById(id).dispatchEvent(new Event('input'));});
+  overrides={};renderOverrides();update();
+});
+
+/* ── Residuals chart (lazy) ── */
+let residChart=null;
+function renderResidChart(){
+  if(residChart)return;
+  const sorted=[...SEATS].sort((a,b)=>Math.abs(b.residual22)-Math.abs(a.residual22));
+  const colors=sorted.map(s=>s.residual22>=0?'rgba(24,95,165,.75)':'rgba(192,57,43,.75)');
+  residChart=new Chart(document.getElementById('residChart'),{
+    type:'bar',
+    data:{labels:sorted.map(s=>s.name),datasets:[{data:sorted.map(s=>s.residual22),
+      backgroundColor:colors,borderWidth:0,barThickness:12}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>[i[0].label],
+        label:i=>{const s=sorted[i.dataIndex];
+          return[`Residual: ${i.raw>=0?'+':''}${i.raw.toFixed(1)} pp`,
+                 `Actual: ${s.bn22.toFixed(1)}%   Fitted: ${s.bn_fitted22.toFixed(1)}%`,`${s.race}  ·  ${s.ur}`];}}}},
+      scales:{x:{ticks:{color:AX,callback:v=>(v>=0?'+':'')+v+'pp'},
+        grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,.4)':'rgba(0,0,0,.06)',lineWidth:ctx=>ctx.tick.value===0?1.5:1}},
+        y:{ticks:{color:'#555',font:{size:10},autoSkip:false,maxRotation:0},grid:{display:false}}}}
+  });
+}
+
+/* ── Opposition split charts (lazy) ── */
+let oppChartsDone=false;
+function renderOppSplitCharts(){
+  if(oppChartsDone)return; oppChartsDone=true;
+  const urMap={'URBAN':0,'SEMI URBAN':0,'RURAL':0}, urN={};
+  SEATS.forEach(s=>{urMap[s.ur]=(urMap[s.ur]||0)+s.ph_opp_frac; urN[s.ur]=(urN[s.ur]||0)+1;});
+  const urLabels=['URBAN','SEMI URBAN','RURAL'];
+  const urVals=urLabels.map(k=>urN[k]?Math.round(urMap[k]/urN[k]*100):0);
+  const urColors=['#378ADD','#7dcc7d','#4ab54a'];
+  new Chart(document.getElementById('urSplitChart'),{type:'bar',
+    data:{labels:urLabels,datasets:[{data:urVals,backgroundColor:urColors,borderWidth:0,barThickness:36}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`PH fraction: ${i.raw}%`}}},
+      scales:{x:{ticks:{color:AX},grid:{display:false}},
+        y:{min:0,max:100,ticks:{color:AX,callback:v=>v+'%'},grid:{color:'rgba(0,0,0,.06)'},
+           title:{display:true,text:'PH % of non-BN votes',color:AX,font:{size:10}}}}}});
+  const catOrder=['Chinese-majority (>50%)','Mixed (no race >50%)','Malay (50-59%)','Malay (60-69%)','Malay (70-79%)','Malay (80-89%)','Malay (90+%)'];
+  const raceMap={},raceN={};
+  SEATS.forEach(s=>{raceMap[s.race]=(raceMap[s.race]||0)+s.ph_opp_frac; raceN[s.race]=(raceN[s.race]||0)+1;});
+  const raceVals=catOrder.map(c=>raceN[c]?Math.round(raceMap[c]/raceN[c]*100):0);
+  const raceCols=catOrder.map(c=>RACE_CLR[c]||'#888');
+  new Chart(document.getElementById('raceSplitChart'),{type:'bar',
+    data:{labels:catOrder.map(c=>c.replace('(>50%)','').replace('(no race >50%)','').trim()),
+      datasets:[{data:raceVals,backgroundColor:raceCols,borderWidth:0,barThickness:16}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>`PH fraction: ${i.raw}%`}}},
+      scales:{x:{ticks:{color:AX,font:{size:10},maxRotation:35},grid:{display:false}},
+        y:{min:0,max:100,ticks:{color:AX,callback:v=>v+'%'},grid:{color:'rgba(0,0,0,.06)'},
+           title:{display:true,text:'PH % of non-BN votes',color:AX,font:{size:10}}}}}});
+}
+
+/* ── Init ── */
+document.getElementById('te-note').style.display='';
+document.getElementById('maj-line').style.left=((MAJ-0.5)/TOTAL*100).toFixed(2)+'%';
+/* Add margin chart canvas lazily to predictions tab */
+const chartDiv=document.createElement('div');
+chartDiv.className='chart-scroll';
+chartDiv.innerHTML='<div style="position:relative;height:1200px"><canvas id="marginChart" role="img" aria-label="Predicted BN margin chart for all seats">Predicted BN margin per seat.</canvas></div>';
+document.getElementById('tab-predict').appendChild(chartDiv);
+update();
+</script>
+</body>
+</html>
