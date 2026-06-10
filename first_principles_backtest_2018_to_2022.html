@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>First-Principles Engine — 2018 → 2022 Backtest</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     background:#f5f5f3;color:#1a1a1a;padding:2rem 1.5rem 3rem;max-width:1180px;margin:0 auto}
+h1{font-size:24px;font-weight:600;margin-bottom:.3rem}
+.sub{font-size:13px;color:#777;margin-bottom:1.5rem;line-height:1.5}
+h2{font-size:16px;font-weight:600;margin:2rem 0 .6rem;border-bottom:1px solid #e0e0e0;padding-bottom:.35rem}
+p.note{font-size:13px;color:#555;line-height:1.6;margin-bottom:.8rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:1rem 0}
+.card{background:#fff;border-radius:10px;padding:.85rem 1rem;border:.5px solid #e0e0e0}
+.card-lbl{font-size:11px;color:#888;margin-bottom:4px}
+.card-val{font-size:26px;font-weight:500;line-height:1.1}
+.card-sub{font-size:11px;color:#888;margin-top:3px}
+.card.good{border-color:#185FA5;background:#EBF3FC}.card.good .card-val{color:#185FA5}
+.panel{background:#fff;border-radius:10px;border:.5px solid #e0e0e0;padding:1rem 1.1rem;margin-bottom:1.1rem}
+.panel-ttl{font-size:12px;font-weight:600;color:#555;margin-bottom:.6rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f5f5f3;font-weight:500;text-align:left;padding:6px 9px;border-bottom:1px solid #ddd;white-space:nowrap}
+td{padding:5px 9px;border-bottom:.5px solid #f0f0f0;white-space:nowrap}
+tr:hover td{background:#fafafa}
+.dp{color:#1D9E75}.dn{color:#c0392b}
+.w-bn{color:#185FA5;font-weight:500}.w-opp{color:#A32D2D;font-weight:500}
+.tag-miss{font-size:10px;background:#FCEBEB;border:.5px solid #D85A30;color:#A32D2D;padding:1px 5px;border-radius:3px;margin-left:4px}
+.tag-marg{font-size:10px;background:#FEF9EC;border:.5px solid #EF9F27;color:#633806;padding:1px 5px;border-radius:3px;margin-left:4px}
+.cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;max-width:430px;font-size:12px;margin:.4rem 0 .8rem}
+.cm div{padding:9px 10px;border-radius:6px;text-align:center}
+.cm .h{background:none;font-weight:600;color:#666;text-align:right;padding-right:8px}
+.cm .ch{background:none;font-weight:600;color:#666}
+.cm .ok{background:#EBF3FC;border:.5px solid #B5D4F4;color:#0C447C;font-weight:600;font-size:16px}
+.cm .bad{background:#FCEBEB;border:.5px solid #f0b5a8;color:#A32D2D;font-weight:600;font-size:16px}
+.cm small{display:block;font-weight:400;font-size:10px;color:#888;margin-top:2px}
+footer{font-size:10px;color:#aaa;margin-top:2.5rem;border-top:.5px solid #e0e0e0;padding-top:.6rem;line-height:1.6}
+</style>
+</head>
+<body>
+
+<h1>First-Principles Engine — 2018 → 2022 Backtest</h1>
+<p class="sub">Out-of-sample evaluation of <code>first_principles_prediction_engine.py</code> on the 2022 Johor DUN
+election (3-way BN vs PH vs PN), assuming perfect knowledge of the 2022 within-group BN support coefficients
+(B<sub>M</sub>, B<sub>C</sub>), Malay/Chinese turnout rates, and 2022 racial composition — with the 2018
+seat residuals carried forward as the only out-of-sample ingredient. Predictions are produced by the engine's
+own <code>predict()</code> code path, identical to the dashboard's JS engine.</p>
+
+<div class="cards" id="cards"></div>
+
+<h2>1 · Per-seat vote-share accuracy</h2>
+<p class="note" id="acc-note"></p>
+<div class="grid2">
+  <div class="panel"><div class="panel-ttl">Predicted vs actual BN vote share (each dot = 1 seat)</div>
+    <div style="position:relative;height:430px"><canvas id="scatter"></canvas></div></div>
+  <div class="panel"><div class="panel-ttl">2018 residual vs 2022 residual (why carrying forward works)</div>
+    <div style="position:relative;height:430px"><canvas id="residScatter"></canvas></div></div>
+</div>
+<div class="panel"><div class="panel-ttl">Prediction error per seat (predicted − actual BN%), sorted</div>
+  <div style="height:560px;overflow-y:auto"><div style="position:relative;height:1100px"><canvas id="errBars"></canvas></div></div></div>
+
+<h2>2 · Seat-call accuracy (3-way winner)</h2>
+<p class="note" id="cm-note"></p>
+<div class="grid2">
+  <div class="panel"><div class="panel-ttl">Confusion matrix — predicted vs actual seat winner</div>
+    <div class="cm" id="cmatrix"></div>
+    <div id="miss-list" style="font-size:12px;color:#555;line-height:1.7"></div></div>
+  <div class="panel"><div class="panel-ttl">What the seat residual contributes (3 runs through the same engine)</div>
+    <div style="position:relative;height:300px"><canvas id="variants"></canvas></div>
+    <p class="note" style="margin-top:.6rem" id="variant-note"></p></div>
+</div>
+
+<h2>3 · Aggregate seat counts</h2>
+<p class="note">The headline question — how many seats does BN win — and whether errors cancel or compound
+when summed across seat groups.</p>
+<div class="grid2">
+  <div class="panel"><div class="panel-ttl">BN seats won — predicted vs actual, by urban–rural class</div>
+    <div style="position:relative;height:300px"><canvas id="urChart"></canvas></div></div>
+  <div class="panel"><div class="panel-ttl">BN seats won — predicted vs actual, by racial composition</div>
+    <div style="position:relative;height:300px"><canvas id="raceChart"></canvas></div></div>
+</div>
+
+<h2>4 · Full seat table</h2>
+<p class="note">Sorted by |prediction error|. Misses and marginal calls flagged.
+"Margin" = predicted BN lead over best opposition party; "actual margin" = realised 2022 equivalent.</p>
+<div class="panel" style="overflow-x:auto"><table id="seatTbl">
+<thead><tr><th>Seat</th><th>Composition</th><th>UR</th><th>2018 BN%</th><th>2022 BN%</th>
+<th>Pred BN%</th><th>Error</th><th>2018 resid</th><th>2022 resid</th>
+<th>Pred margin</th><th>Pred</th><th>Actual</th></tr></thead><tbody></tbody></table></div>
+
+<h2>5 · Reading the result</h2>
+<div class="panel" id="findings" style="font-size:13px;line-height:1.7;color:#333"></div>
+
+<footer>
+Backtest spec: BN_pred = B<sub>M,22</sub>×Malay_eff + B<sub>C,22</sub>×Chinese_eff + residual<sub>2018</sub>,
+with effective composition from 2022 registered composition and the engine's turnout formula calibrated to
+TM<sub>22</sub>/TC<sub>22</sub>. Opposition split: engine default (2022 baseline fractions). Generated by
+backtest_2018_to_2022.py from harmonised SPR data in DATA/.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const BT={"seats":[{"name":"BULOH KASAP","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":56.9,"bn18":52.51,"bn22":56.96,"bn_pred":54.96,"err":-2.0,"resid18":11.92,"resid22":13.65,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":31.16,"act_margin":34.2},{"name":"JEMENTAH","race":"Chinese-majority (>50%)","ur":"SEMI URBAN","malay":40.8,"bn18":33.75,"bn22":37.63,"bn_pred":37.98,"err":0.35,"resid18":2.25,"resid22":1.63,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-2.7,"act_margin":-3.29},{"name":"PEMANIS","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":63.6,"bn18":43.17,"bn22":50.33,"bn_pred":45.1,"err":-5.23,"resid18":-1.68,"resid22":3.69,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":16.32,"act_margin":24.29},{"name":"KEMELAH","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":54.3,"bn18":43.9,"bn22":41.13,"bn_pred":46.14,"err":5.01,"resid18":3.74,"resid22":-2.17,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":16.58,"act_margin":8.81},{"name":"TENANG","race":"Mixed (no race >50%)","ur":"RURAL","malay":49.2,"bn18":43.79,"bn22":44.92,"bn_pred":46.18,"err":1.26,"resid18":6.84,"resid22":4.58,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.63,"act_margin":12.62},{"name":"BEKOK","race":"Mixed (no race >50%)","ur":"SEMI URBAN","malay":30.3,"bn18":42.94,"bn22":51.31,"bn_pred":47.26,"err":-4.05,"resid18":18.39,"resid22":22.05,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":19.89,"act_margin":26.02},{"name":"BUKIT KEPONG","race":"Malay (70-79%)","ur":"RURAL","malay":70.3,"bn18":43.63,"bn22":41.08,"bn_pred":44.83,"err":3.75,"resid18":-4.67,"resid22":-7.72,"pred_win":"BN","act_win":"Opposition","correct":false,"marginal":true,"margin_pp":3.38,"act_margin":-3.18},{"name":"BUKIT PASIR","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":62.3,"bn18":44.71,"bn22":32.11,"bn_pred":47.54,"err":15.43,"resid18":1.46,"resid22":-12.95,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":23.54,"act_margin":1.05},{"name":"GAMBIR","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":59.4,"bn18":37.31,"bn22":45.48,"bn_pred":40.71,"err":-4.77,"resid18":-4.17,"resid22":3.09,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":10.79,"act_margin":17.97},{"name":"TANGKAK","race":"Mixed (no race >50%)","ur":"SEMI URBAN","malay":40.6,"bn18":38.43,"bn22":38.98,"bn_pred":43.07,"err":4.09,"resid18":7.7,"resid22":5.38,"pred_win":"BN","act_win":"Opposition","correct":false,"marginal":true,"margin_pp":4.96,"act_margin":-1.88},{"name":"SEROM","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":67.1,"bn18":39.49,"bn22":38.4,"bn_pred":41.32,"err":2.92,"resid18":-7.11,"resid22":-11.24,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":7.74,"act_margin":3.15},{"name":"BENTAYAN","race":"Chinese-majority (>50%)","ur":"URBAN","malay":26.5,"bn18":20.28,"bn22":20.57,"bn_pred":25.94,"err":5.37,"resid18":-2.91,"resid22":-9.06,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-34.21,"act_margin":-43.97},{"name":"SIMPANG JERAM","race":"Malay (50-59%)","ur":"URBAN","malay":52.7,"bn18":29.27,"bn22":28.37,"bn_pred":32.28,"err":3.91,"resid18":-9.7,"resid22":-15.02,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-6.41,"act_margin":-12.57},{"name":"BUKIT NANING","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":63.3,"bn18":38.06,"bn22":38.14,"bn_pred":41.35,"err":3.21,"resid18":-5.47,"resid22":-4.55,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":15.39,"act_margin":10.77},{"name":"MAHARANI","race":"Malay (60-69%)","ur":"URBAN","malay":61.6,"bn18":29.26,"bn22":27.89,"bn_pred":31.3,"err":3.41,"resid18":-14.66,"resid22":-20.23,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-2.97,"act_margin":-8.08},{"name":"SUNGAI BALANG","race":"Malay (70-79%)","ur":"RURAL","malay":73.6,"bn18":42.19,"bn22":45.57,"bn_pred":42.63,"err":-2.94,"resid18":-8.48,"resid22":-4.71,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":7.88,"act_margin":12.6},{"name":"SEMERAH","race":"Malay (70-79%)","ur":"RURAL","malay":74.3,"bn18":42.51,"bn22":44.93,"bn_pred":44.63,"err":-0.3,"resid18":-6.71,"resid22":-6.08,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.02,"act_margin":14.48},{"name":"SRI MEDAN","race":"Malay (90+%)","ur":"RURAL","malay":90.6,"bn18":56.88,"bn22":60.52,"bn_pred":55.66,"err":-4.86,"resid18":-1.74,"resid22":6.28,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":20.08,"act_margin":28.84},{"name":"YONG PENG","race":"Chinese-majority (>50%)","ur":"SEMI URBAN","malay":35.1,"bn18":34.76,"bn22":52.84,"bn_pred":39.97,"err":-12.87,"resid18":7.0,"resid22":22.47,"pred_win":"Opposition","act_win":"BN","correct":false,"marginal":true,"margin_pp":-8.6,"act_margin":14.67},{"name":"SEMARANG","race":"Malay (80-89%)","ur":"RURAL","malay":86.2,"bn18":59.45,"bn22":61.93,"bn_pred":58.82,"err":-3.11,"resid18":3.0,"resid22":8.93,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":27.04,"act_margin":32.55},{"name":"PARIT YAANI","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":55.8,"bn18":32.89,"bn22":38.56,"bn_pred":35.81,"err":-2.75,"resid18":-7.76,"resid22":-4.71,"pred_win":"Opposition","act_win":"BN","correct":false,"marginal":true,"margin_pp":-3.16,"act_margin":1.25},{"name":"PARIT RAJA","race":"Malay (70-79%)","ur":"SEMI URBAN","malay":74.3,"bn18":44.28,"bn22":49.57,"bn_pred":46.45,"err":-3.12,"resid18":-4.78,"resid22":-1.72,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.68,"act_margin":19.67},{"name":"PENGGARAM","race":"Chinese-majority (>50%)","ur":"URBAN","malay":36.7,"bn18":23.11,"bn22":24.32,"bn_pred":27.03,"err":2.71,"resid18":-7.25,"resid22":-11.73,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-24.71,"act_margin":-29.35},{"name":"SENGGARANG","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":63.2,"bn18":42.38,"bn22":45.11,"bn_pred":43.87,"err":-1.24,"resid18":-2.91,"resid22":-1.23,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":16.31,"act_margin":18.15},{"name":"RENGIT","race":"Malay (80-89%)","ur":"RURAL","malay":82.0,"bn18":55.33,"bn22":48.91,"bn_pred":53.52,"err":4.61,"resid18":-0.74,"resid22":-6.51,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":19.84,"act_margin":11.88},{"name":"MACHAP","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":66.4,"bn18":46.93,"bn22":56.64,"bn_pred":49.33,"err":-7.31,"resid18":1.61,"resid22":8.86,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":22.41,"act_margin":33.6},{"name":"LAYANG-LAYANG","race":"Malay (50-59%)","ur":"RURAL","malay":56.7,"bn18":46.93,"bn22":55.0,"bn_pred":50.26,"err":-4.74,"resid18":7.53,"resid22":11.53,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":12.13,"act_margin":20.5},{"name":"MENGKIBOL","race":"Chinese-majority (>50%)","ur":"URBAN","malay":28.9,"bn18":25.9,"bn22":28.86,"bn_pred":31.49,"err":2.63,"resid18":2.52,"resid22":0.0,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-25.23,"act_margin":-30.05},{"name":"MAHKOTA","race":"Malay (50-59%)","ur":"URBAN","malay":55.9,"bn18":44.11,"bn22":45.86,"bn_pred":46.21,"err":0.35,"resid18":3.44,"resid22":3.18,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.84,"act_margin":14.26},{"name":"PALOH","race":"Mixed (no race >50%)","ur":"RURAL","malay":47.6,"bn18":47.55,"bn22":55.05,"bn_pred":50.73,"err":-4.32,"resid18":12.53,"resid22":18.94,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.12,"act_margin":21.65},{"name":"KAHANG","race":"Malay (70-79%)","ur":"SEMI URBAN","malay":74.3,"bn18":57.66,"bn22":62.69,"bn_pred":58.03,"err":-4.66,"resid18":7.03,"resid22":9.92,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":32.56,"act_margin":40.04},{"name":"ENDAU","race":"Malay (80-89%)","ur":"SEMI URBAN","malay":81.3,"bn18":47.95,"bn22":35.47,"bn_pred":42.44,"err":6.97,"resid18":-11.23,"resid22":-24.95,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-7.06,"act_margin":-20.01},{"name":"TENGGAROH","race":"Malay (80-89%)","ur":"RURAL","malay":83.2,"bn18":54.96,"bn22":49.1,"bn_pred":51.9,"err":2.8,"resid18":-2.61,"resid22":-10.68,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":11.48,"act_margin":6.32},{"name":"PANTI","race":"Malay (70-79%)","ur":"SEMI URBAN","malay":78.5,"bn18":53.15,"bn22":57.29,"bn_pred":52.78,"err":-4.51,"resid18":0.4,"resid22":1.87,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":18.85,"act_margin":26.62},{"name":"PASIR RAJA","race":"Malay (60-69%)","ur":"RURAL","malay":69.7,"bn18":51.59,"bn22":58.21,"bn_pred":52.51,"err":-5.7,"resid18":4.0,"resid22":8.7,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":20.82,"act_margin":30.33},{"name":"SEDILI","race":"Malay (90+%)","ur":"RURAL","malay":97.2,"bn18":75.98,"bn22":63.52,"bn_pred":72.27,"err":8.75,"resid18":12.64,"resid22":5.66,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":46.72,"act_margin":29.9},{"name":"JOHOR LAMA","race":"Malay (80-89%)","ur":"RURAL","malay":83.3,"bn18":60.57,"bn22":60.56,"bn_pred":60.15,"err":-0.41,"resid18":5.58,"resid22":5.83,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":29.32,"act_margin":30.05},{"name":"PENAWAR","race":"Malay (90+%)","ur":"RURAL","malay":98.5,"bn18":70.35,"bn22":66.98,"bn_pred":65.85,"err":-1.13,"resid18":5.78,"resid22":4.3,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":38.47,"act_margin":40.51},{"name":"TANJUNG SURAT","race":"Malay (80-89%)","ur":"RURAL","malay":80.9,"bn18":65.37,"bn22":66.97,"bn_pred":63.06,"err":-3.91,"resid18":9.24,"resid22":10.98,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":33.04,"act_margin":40.14},{"name":"TIRAM","race":"Malay (50-59%)","ur":"URBAN","malay":59.4,"bn18":36.65,"bn22":40.66,"bn_pred":40.81,"err":0.15,"resid18":-2.96,"resid22":-5.59,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":9.57,"act_margin":9.36},{"name":"PUTERI WANGSA","race":"Chinese-majority (>50%)","ur":"URBAN","malay":37.3,"bn18":23.55,"bn22":29.78,"bn_pred":27.73,"err":-2.05,"resid18":-5.94,"resid22":-7.75,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-27.12,"act_margin":-23.52},{"name":"JOHOR JAYA","race":"Mixed (no race >50%)","ur":"URBAN","malay":42.5,"bn18":32.44,"bn22":37.68,"bn_pred":36.89,"err":-0.79,"resid18":0.59,"resid22":0.52,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-5.37,"act_margin":-4.06},{"name":"PERMAS","race":"Malay (50-59%)","ur":"URBAN","malay":55.5,"bn18":37.73,"bn22":41.93,"bn_pred":41.08,"err":-0.85,"resid18":-0.77,"resid22":-1.03,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":12.88,"act_margin":14.15},{"name":"LARKIN","race":"Malay (60-69%)","ur":"URBAN","malay":64.5,"bn18":36.77,"bn22":41.77,"bn_pred":37.11,"err":-4.66,"resid18":-9.63,"resid22":-11.48,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":9.34,"act_margin":16.07},{"name":"STULANG","race":"Chinese-majority (>50%)","ur":"URBAN","malay":40.1,"bn18":32.45,"bn22":34.56,"bn_pred":34.84,"err":0.28,"resid18":-0.78,"resid22":-6.34,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-9.79,"act_margin":-10.28},{"name":"PERLING","race":"Mixed (no race >50%)","ur":"URBAN","malay":39.5,"bn18":25.34,"bn22":35.76,"bn_pred":26.1,"err":-9.66,"resid18":-8.37,"resid22":-7.17,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-24.03,"act_margin":-7.83},{"name":"KEMPAS","race":"Malay (50-59%)","ur":"URBAN","malay":57.1,"bn18":33.77,"bn22":38.92,"bn_pred":35.58,"err":-3.34,"resid18":-7.5,"resid22":-10.2,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":6.65,"act_margin":11.47},{"name":"SKUDAI","race":"Chinese-majority (>50%)","ur":"URBAN","malay":23.0,"bn18":20.53,"bn22":27.57,"bn_pred":24.86,"err":-2.71,"resid18":-0.6,"resid22":-1.09,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-35.86,"act_margin":-30.96},{"name":"KOTA ISKANDAR","race":"Malay (50-59%)","ur":"URBAN","malay":50.1,"bn18":32.99,"bn22":40.79,"bn_pred":36.24,"err":-4.55,"resid18":-3.31,"resid22":-3.3,"pred_win":"BN","act_win":"BN","correct":true,"marginal":true,"margin_pp":0.6,"act_margin":7.69},{"name":"BUKIT PERMAI","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":54.0,"bn18":40.6,"bn22":48.36,"bn_pred":45.03,"err":-3.33,"resid18":3.55,"resid22":7.91,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":14.23,"act_margin":19.41},{"name":"BUKIT BATU","race":"Chinese-majority (>50%)","ur":"SEMI URBAN","malay":37.2,"bn18":27.07,"bn22":38.63,"bn_pred":33.61,"err":-5.02,"resid18":-0.28,"resid22":4.92,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":true,"margin_pp":-8.8,"act_margin":-0.57},{"name":"SENAI","race":"Chinese-majority (>50%)","ur":"URBAN","malay":29.1,"bn18":24.9,"bn22":33.21,"bn_pred":31.18,"err":-2.03,"resid18":2.14,"resid22":3.82,"pred_win":"Opposition","act_win":"Opposition","correct":true,"marginal":false,"margin_pp":-22.14,"act_margin":-18.54},{"name":"BENUT","race":"Malay (80-89%)","ur":"RURAL","malay":82.2,"bn18":55.43,"bn22":63.08,"bn_pred":54.86,"err":-8.22,"resid18":0.48,"resid22":8.89,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":19.19,"act_margin":33.92},{"name":"PULAI SEBATANG","race":"Malay (60-69%)","ur":"SEMI URBAN","malay":62.9,"bn18":38.86,"bn22":50.06,"bn_pred":41.92,"err":-8.14,"resid18":-4.65,"resid22":-0.03,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":13.23,"act_margin":25.38},{"name":"PEKAN NANAS","race":"Malay (50-59%)","ur":"SEMI URBAN","malay":55.8,"bn18":47.08,"bn22":51.53,"bn_pred":51.98,"err":0.45,"resid18":8.46,"resid22":10.65,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":23.32,"act_margin":22.6},{"name":"KUKUP","race":"Malay (60-69%)","ur":"RURAL","malay":60.5,"bn18":49.6,"bn22":60.37,"bn_pred":52.16,"err":-8.21,"resid18":6.53,"resid22":14.01,"pred_win":"BN","act_win":"BN","correct":true,"marginal":false,"margin_pp":30.62,"act_margin":42.53}],"metrics":{"backtest":{"rmse":5.041760378534046,"mae":4.0341567935326115,"bias":-1.2332769960304024,"correct":52,"bn_seats":40},"no_resid":{"rmse":8.863537374841714,"mae":7.0320717047275,"bias":-1.358455567458974,"correct":48,"bn_seats":40},"in_sample":{"rmse":2.767566163111037,"mae":1.978307981915522,"bias":-0.9475627103161164,"correct":54,"bn_seats":40}},"params":{"BM18":65.0532477569255,"BC18":10.014853144077522,"TM18":85.06035676845791,"TC18":85.38839083572411,"TI18":88.49872187273375,"RMSE18":6.7375429732916,"BM22":60.69,"BC22":12.78,"TM22":66.18,"TC22":45.85,"gap_MC":20.34,"T_target":57.92,"engine_rmse22":9.78,"resid_corr":0.851},"by_ur":{"SEMI URBAN":{"pred":17,"actual":18,"total":22},"RURAL":{"pred":17,"actual":16,"total":17},"URBAN":{"pred":6,"actual":6,"total":17}},"by_race":{"Malay (50-59%)":{"pred":11,"actual":12,"total":13},"Chinese-majority (>50%)":{"pred":0,"actual":1,"total":10},"Malay (60-69%)":{"pred":10,"actual":10,"total":11},"Mixed (no race >50%)":{"pred":4,"actual":3,"total":6},"Malay (70-79%)":{"pred":6,"actual":5,"total":6},"Malay (90+%)":{"pred":3,"actual":3,"total":3},"Malay (80-89%)":{"pred":6,"actual":6,"total":7}}};
+const S=BT.seats, M=BT.metrics, P=BT.params;
+const AX='#888';
+const fmt=(v,d=1)=>(v>=0?'+':'')+v.toFixed(d);
+
+/* ── cards ── */
+const mb=M.backtest;
+const actualBN=S.filter(s=>s.act_win==='BN').length;
+document.getElementById('cards').innerHTML=`
+<div class="card good"><div class="card-lbl">Backtest RMSE</div><div class="card-val">${mb.rmse.toFixed(1)} pp</div>
+  <div class="card-sub">vs ${M.no_resid.rmse.toFixed(1)} pp composition-only</div></div>
+<div class="card"><div class="card-lbl">Mean absolute error</div><div class="card-val">${mb.mae.toFixed(1)} pp</div>
+  <div class="card-sub">bias ${fmt(mb.bias)} pp</div></div>
+<div class="card good"><div class="card-lbl">Correct seat calls</div><div class="card-val">${mb.correct}/56</div>
+  <div class="card-sub">${(mb.correct/56*100).toFixed(0)}% (3-way winner)</div></div>
+<div class="card good"><div class="card-lbl">BN seats — predicted</div><div class="card-val">${mb.bn_seats}</div>
+  <div class="card-sub">actual: ${actualBN} of 56 (majority 29)</div></div>
+<div class="card"><div class="card-lbl">Residual persistence</div><div class="card-val">r = ${P.resid_corr.toFixed(2)}</div>
+  <div class="card-sub">2018 ↔ 2022 seat residuals</div></div>`;
+
+document.getElementById('acc-note').innerHTML=
+ `Out-of-sample RMSE is <strong>${mb.rmse.toFixed(2)} pp</strong> (MAE ${mb.mae.toFixed(2)} pp, mean bias ${fmt(mb.bias,2)} pp) —
+  roughly half the engine's stated ±${P.engine_rmse22.toFixed(1)} pp in-sample RMSE band, because the carried-forward 2018
+  residuals already absorb most seat-specific variation. The left panel shows predictions hugging the 45° line;
+  the right panel shows why: seat residuals barely moved between 2018 and 2022 (r = ${P.resid_corr.toFixed(2)}).`;
+
+/* ── scatter pred vs actual ── */
+new Chart(document.getElementById('scatter'),{type:'scatter',
+ data:{datasets:[
+  {label:'Correct call',data:S.filter(s=>s.correct).map(s=>({x:s.bn22,y:s.bn_pred,seat:s})),
+   backgroundColor:'rgba(24,95,165,.75)',pointRadius:4.5},
+  {label:'Wrong call',data:S.filter(s=>!s.correct).map(s=>({x:s.bn22,y:s.bn_pred,seat:s})),
+   backgroundColor:'rgba(192,57,43,.9)',pointRadius:6,pointStyle:'rectRot'},
+  {label:'Perfect prediction',type:'line',data:[{x:10,y:10},{x:75,y:75}],borderColor:'rgba(0,0,0,.35)',
+   borderDash:[5,4],borderWidth:1.2,pointRadius:0}]},
+ options:{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{labels:{color:'#555',font:{size:11},usePointStyle:true}},
+   tooltip:{callbacks:{label:i=>{const s=i.raw.seat;return s?[s.name,
+     `Actual: ${s.bn22.toFixed(1)}%  Pred: ${s.bn_pred.toFixed(1)}%`,
+     `Error: ${fmt(s.err)} pp  ·  ${s.race}`]:null}}}},
+  scales:{x:{title:{display:true,text:'Actual 2022 BN vote share (%)',color:AX,font:{size:11}},
+            min:10,max:75,ticks:{color:AX},grid:{color:'rgba(0,0,0,.06)'}},
+          y:{title:{display:true,text:'Predicted BN vote share (%)',color:AX,font:{size:11}},
+            min:10,max:75,ticks:{color:AX},grid:{color:'rgba(0,0,0,.06)'}}}}});
+
+/* ── residual persistence scatter ── */
+new Chart(document.getElementById('residScatter'),{type:'scatter',
+ data:{datasets:[
+  {label:'Seat',data:S.map(s=>({x:s.resid18,y:s.resid22,seat:s})),
+   backgroundColor:'rgba(29,158,117,.7)',pointRadius:4.5},
+  {label:'No drift (45°)',type:'line',data:[{x:-28,y:-28},{x:28,y:28}],borderColor:'rgba(0,0,0,.35)',
+   borderDash:[5,4],borderWidth:1.2,pointRadius:0}]},
+ options:{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{labels:{color:'#555',font:{size:11},usePointStyle:true}},
+   tooltip:{callbacks:{label:i=>{const s=i.raw.seat;return s?[s.name,
+     `2018 resid: ${fmt(s.resid18)}  2022 resid: ${fmt(s.resid22)}`]:null}}}},
+  scales:{x:{title:{display:true,text:'2018 seat residual (pp)',color:AX,font:{size:11}},
+            min:-28,max:28,ticks:{color:AX},grid:{color:c=>c.tick.value===0?'rgba(0,0,0,.35)':'rgba(0,0,0,.06)'}},
+          y:{title:{display:true,text:'2022 seat residual (pp)',color:AX,font:{size:11}},
+            min:-28,max:28,ticks:{color:AX},grid:{color:c=>c.tick.value===0?'rgba(0,0,0,.35)':'rgba(0,0,0,.06)'}}}}});
+
+/* ── error bars ── */
+const byErr=[...S].sort((a,b)=>b.err-a.err);
+new Chart(document.getElementById('errBars'),{type:'bar',
+ data:{labels:byErr.map(s=>s.name),datasets:[{data:byErr.map(s=>s.err),
+  backgroundColor:byErr.map(s=>!s.correct?'rgba(192,57,43,.9)':s.err>=0?'rgba(24,95,165,.7)':'rgba(24,95,165,.45)'),
+  borderWidth:0,barThickness:12}]},
+ options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>[i[0].label],
+   label:i=>{const s=byErr[i.dataIndex];return[
+    `Error: ${fmt(i.raw)} pp`,`Pred ${s.bn_pred.toFixed(1)}%  Actual ${s.bn22.toFixed(1)}%`,
+    s.correct?'Winner called correctly':'WRONG seat call'];}}}},
+  scales:{x:{ticks:{color:AX,callback:v=>fmt(v,0)+'pp'},
+   grid:{color:c=>c.tick.value===0?'rgba(0,0,0,.4)':'rgba(0,0,0,.06)'}},
+   y:{ticks:{color:'#555',font:{size:10},autoSkip:false},grid:{display:false}}}}});
+
+/* ── confusion matrix ── */
+const tp=S.filter(s=>s.pred_win==='BN'&&s.act_win==='BN').length;
+const fp=S.filter(s=>s.pred_win==='BN'&&s.act_win!=='BN').length;
+const fn=S.filter(s=>s.pred_win!=='BN'&&s.act_win==='BN').length;
+const tn=S.filter(s=>s.pred_win!=='BN'&&s.act_win!=='BN').length;
+document.getElementById('cmatrix').innerHTML=`
+<div></div><div class="ch">Actual BN win</div><div class="ch">Actual Opp win</div>
+<div class="h">Predicted BN</div><div class="ok">${tp}<small>correct</small></div><div class="bad">${fp}<small>false BN call</small></div>
+<div class="h">Predicted Opp</div><div class="bad">${fn}<small>missed BN win</small></div><div class="ok">${tn}<small>correct</small></div>`;
+const misses=S.filter(s=>!s.correct);
+const nMarg=misses.filter(s=>s.marginal).length;
+document.getElementById('miss-list').innerHTML='<strong>Missed seats:</strong><br>'+misses.map(s=>
+ `• <strong>${s.name}</strong> — pred ${s.pred_win} (BN ${s.bn_pred.toFixed(1)}%, margin ${fmt(s.margin_pp)}), actual ${s.act_win}`+
+ ` (BN ${s.bn22.toFixed(1)}%)${s.marginal?' <span class="tag-marg">flagged marginal</span>':''}`).join('<br>');
+document.getElementById('cm-note').innerHTML=
+ `${mb.correct} of 56 seats called correctly. The false BN calls and missed BN wins offset exactly, so the
+  statewide tally lands on <strong>${mb.bn_seats} BN seats — identical to the actual ${actualBN}</strong>.
+  ${nMarg} of the ${misses.length} misses were pre-flagged by the engine as marginal (within ±${P.engine_rmse22.toFixed(0)} pp RMSE of the threshold).`;
+
+/* ── variant comparison ── */
+new Chart(document.getElementById('variants'),{type:'bar',
+ data:{labels:['No residuals\n(composition only)','2018 residuals\n(backtest)','2022 residuals\n(in-sample ceiling)'],
+  datasets:[{label:'RMSE (pp)',data:[M.no_resid.rmse,M.backtest.rmse,M.in_sample.rmse],
+   backgroundColor:['rgba(186,117,23,.75)','rgba(24,95,165,.85)','rgba(29,158,117,.75)'],borderWidth:0,barThickness:52}]},
+ options:{responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{callbacks:{
+   label:i=>{const m=[M.no_resid,M.backtest,M.in_sample][i.dataIndex];
+    return[`RMSE: ${m.rmse.toFixed(2)} pp`,`Correct calls: ${m.correct}/56`,`BN seats: ${m.bn_seats}`];}}}},
+  scales:{x:{ticks:{color:'#555',font:{size:11}},grid:{display:false}},
+   y:{title:{display:true,text:'Vote-share RMSE (pp)',color:AX,font:{size:11}},
+    ticks:{color:AX},grid:{color:'rgba(0,0,0,.06)'},beginAtZero:true}}}});
+document.getElementById('variant-note').innerHTML=
+ `Carrying 2018 residuals forward cuts RMSE from ${M.no_resid.rmse.toFixed(1)} to ${M.backtest.rmse.toFixed(1)} pp
+  (seat calls: ${M.no_resid.correct}→${M.backtest.correct}/56). The in-sample run with true 2022 residuals still shows
+  ${M.in_sample.rmse.toFixed(1)} pp RMSE — that floor is the engine's turnout-formula approximation (it models per-seat
+  turnout from composition rather than using each seat's actual turnout), so ~${M.in_sample.rmse.toFixed(1)} pp of the
+  backtest error is structural, and only ~${(M.backtest.rmse-M.in_sample.rmse).toFixed(1)} pp comes from residual drift.`;
+
+/* ── group bars ── */
+function groupChart(id,groups,order){
+ const labels=order.filter(k=>groups[k]);
+ new Chart(document.getElementById(id),{type:'bar',
+  data:{labels:labels.map(l=>l.replace(' (no race >50%)','').replace('(>50%)','')),
+   datasets:[
+    {label:'Predicted BN seats',data:labels.map(k=>groups[k].pred),backgroundColor:'rgba(24,95,165,.85)',borderWidth:0},
+    {label:'Actual BN seats',data:labels.map(k=>groups[k].actual),backgroundColor:'rgba(120,120,120,.55)',borderWidth:0},
+    {label:'Seats in group',data:labels.map(k=>groups[k].total),backgroundColor:'rgba(0,0,0,.08)',borderWidth:0}]},
+  options:{responsive:true,maintainAspectRatio:false,
+   plugins:{legend:{labels:{color:'#555',font:{size:11}}}},
+   scales:{x:{ticks:{color:'#555',font:{size:10},maxRotation:35},grid:{display:false}},
+    y:{ticks:{color:AX,stepSize:5},grid:{color:'rgba(0,0,0,.06)'},beginAtZero:true}}}});
+}
+groupChart('urChart',BT.by_ur,['URBAN','SEMI URBAN','RURAL']);
+groupChart('raceChart',BT.by_race,['Chinese-majority (>50%)','Mixed (no race >50%)','Malay (50-59%)',
+ 'Malay (60-69%)','Malay (70-79%)','Malay (80-89%)','Malay (90+%)']);
+
+/* ── seat table ── */
+const rows=[...S].sort((a,b)=>Math.abs(b.err)-Math.abs(a.err));
+document.querySelector('#seatTbl tbody').innerHTML=rows.map(s=>`<tr>
+ <td>${s.name}${!s.correct?'<span class="tag-miss">miss</span>':''}${s.marginal?'<span class="tag-marg">marginal</span>':''}</td>
+ <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${s.race}</td><td>${s.ur}</td>
+ <td>${s.bn18.toFixed(1)}%</td><td>${s.bn22.toFixed(1)}%</td><td><strong>${s.bn_pred.toFixed(1)}%</strong></td>
+ <td class="${s.err>=0?'dp':'dn'}">${fmt(s.err)}</td>
+ <td>${fmt(s.resid18)}</td><td>${fmt(s.resid22)}</td>
+ <td class="${s.margin_pp>=0?'dp':'dn'}">${fmt(s.margin_pp)}</td>
+ <td class="${s.pred_win==='BN'?'w-bn':'w-opp'}">${s.pred_win==='BN'?'BN':'Opp'}</td>
+ <td class="${s.act_win==='BN'?'w-bn':'w-opp'}">${s.act_win==='BN'?'BN':'Opp'}</td></tr>`).join('');
+
+/* ── findings ── */
+const worst=rows[0];
+const worstMiss=rows.find(s=>!s.correct);
+document.getElementById('findings').innerHTML=`
+<p><strong>The engine's structure holds up.</strong> Given perfect 2022 coefficients
+(B<sub>M</sub> = ${P.BM22}%, B<sub>C</sub> = ${P.BC22}%), turnout rates (TM = ${P.TM22}%, TC = ${P.TC22}%,
+gap ≈ ${P.gap_MC} pp) and 2022 composition, the 2018-residual backtest delivers ${mb.rmse.toFixed(1)} pp RMSE,
+${mb.correct}/56 correct seat calls and the exact statewide BN seat count (${mb.bn_seats} vs ${actualBN}).
+The seat-level identity "BN share = group support × effective composition + persistent local effect" is a sound
+basis for forecasting BN performance — <em>if</em> the group-level inputs can be estimated well.</p>
+<p style="margin-top:.6rem"><strong>Error decomposition.</strong> Of the ${mb.rmse.toFixed(1)} pp error,
+roughly ${M.in_sample.rmse.toFixed(1)} pp is structural (the turnout-formula approximation, present even with
+perfect residuals) and the remainder is residual drift between cycles (r = ${P.resid_corr.toFixed(2)} persistence).
+The composition-only run (${M.no_resid.rmse.toFixed(1)} pp) confirms the seat residual is the single most
+valuable input after the coefficients themselves.</p>
+<p style="margin-top:.6rem"><strong>Where it breaks.</strong> The largest vote-share error is ${worst.name}
+(${fmt(worst.err)} pp) and the costliest wrong call is ${worstMiss.name} (${fmt(worstMiss.err)} pp):
+seats whose 2018 local dynamics changed qualitatively — a star candidate, or PN emerging as a serious
+local force after 2018 — are exactly where a carried-forward residual fails. Encouragingly, all
+${misses.length} wrong calls were pre-flagged by the engine as marginal. These are candidates for the
+engine's seat-override mechanism, not for model changes.</p>
+<p style="margin-top:.6rem"><strong>Caveats.</strong> (1) This is a best-case test: B<sub>M</sub>, B<sub>C</sub>,
+TM, TC were fitted on the very 2022 outcome being predicted; real forward use must estimate them from polls,
+so realistic error will be larger. (2) The 3-way opposition split uses the engine's default baseline = observed
+2022 PH/PN fractions, i.e. the opposition geometry is also perfectly known; the BN-vs-best-opponent seat call
+is therefore tested under ideal conditions. (3) One election pair (2018→2022, n = 56 seats) spanning an unusual
+realignment (Sheraton Move, PN's emergence); persistence may differ in calmer cycles. (4) B<sub>C</sub> mixes
+Chinese and Indian support by construction (Indian voters are absorbed into the residual).</p>`;
+</script>
+</body>
+</html>
